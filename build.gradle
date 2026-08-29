@@ -1,0 +1,112 @@
+buildscript {
+    repositories { maven { url = 'https://repo.spongepowered.org/repository/maven-public/' } }
+    dependencies { classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT' }
+}
+
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+group = mod_group_id
+version = mod_version
+base { archivesName = mod_id }
+java { toolchain.languageVersion = JavaLanguageVersion.of(17) }
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            mods { "${mod_id}" { source sourceSets.main } }
+        }
+        client {
+            // PlayerAnimator's development mixins require remapped refmaps.
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+        }
+        server { args '--nogui' }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.minecraftforge.net/' }
+    maven { url = 'https://maven.kosmx.dev/' }
+    maven {
+        name = 'Curse Maven'
+        url = 'https://www.cursemaven.com'
+        content { includeGroup 'curse.maven' }
+    }
+    flatDir { dirs '../原型模组' }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+
+    implementation fg.deobf('local:[自定义NPC]CustomNPCs-1.20.1-GBPort-Unofficial:1.20.1.20260711')
+    // Dominion Sword is optional at runtime.  Its public APIs are compiled against the
+    // selected local baseline, while the common mod entrypoint reflects the bootstrap.
+    if (!project.hasProperty('dominionsword_jar')) {
+        throw new GradleException('Set -Pdominionsword_jar=<Dominion Sword jar> to compile the optional command adapter.')
+    }
+    compileOnly files(project.property('dominionsword_jar'))
+    // The published archive does not bundle either dependency. These are compile baselines only.
+    compileOnly fg.deobf("curse.maven:timeless-and-classics-zero-1028108:${tacz_compile_version}")
+    compileOnly fg.deobf("dev.kosmx.player-anim:player-animation-lib-forge:${player_animator_compile_version}")
+    // Development server launches need TaCZ itself, but never PlayerAnimator:
+    // this also proves that no common/server class resolves the client library.
+    runtimeOnly fg.deobf("curse.maven:timeless-and-classics-zero-1028108:${tacz_compile_version}")
+    // Opt in only for a local graphical smoke test. The fixed version remains a
+    // development baseline; mods.toml is the deliberately open runtime contract.
+    if (project.hasProperty('with_playeranimator')) {
+        runtimeOnly fg.deobf("dev.kosmx.player-anim:player-animation-lib-forge:${player_animator_compile_version}")
+    }
+
+}
+
+mixin {
+    add sourceSets.main, 'customnpcs_tacz_compat.refmap.json'
+    config 'customnpcs_tacz_compat.mixins.json'
+}
+
+def verifyNativeGunLogic = tasks.register('verifyNativeGunLogic', JavaExec) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = 'Runs dependency-free native-CNPC TaCZ combat timing checks.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.arxyt.customnpcstaczcompat.NativeGunLogicCheck'
+}
+tasks.named('test', Test).configure {
+    // The ForgeGradle 6 mapped-test worker cannot resolve test classes from this
+    // non-ASCII workspace path. Retain the normal `test` entry point, but run the
+    // pure state-machine checks in a regular JVM process instead of that worker.
+    dependsOn verifyNativeGunLogic
+    exclude '**/*'
+}
+tasks.named('processResources', ProcessResources).configure {
+    filteringCharset = 'UTF-8'
+    def props = [minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
+                 forge_version: forge_version, forge_version_range: forge_version_range,
+                 loader_version_range: loader_version_range, mod_id: mod_id, mod_name: mod_name,
+                 mod_license: mod_license, mod_version: mod_version, mod_authors: mod_authors,
+                 mod_description: mod_description]
+    inputs.properties props
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) { expand props + [project: project] }
+}
+tasks.named('jar', Jar).configure {
+    from('LICENSE')
+    from('NOTICE')
+    from(layout.buildDirectory.dir('tmp/compileJava')) {
+        include 'compileJava-refmap.json'
+        rename 'compileJava-refmap.json', 'customnpcs_tacz_compat.refmap.json'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    finalizedBy 'reobfJar'
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

@@ -1,0 +1,9 @@
+Third-party notices
+
+- PlayerAnimator is an external MIT-licensed runtime dependency. It is not
+  included in this source tree or release jar. Upstream: https://github.com/KosmX/minecraftPlayerAnimator
+- TaCZ supplies the public gun APIs and gun-pack `player_animator` resources.
+  This project does not invoke TaCZ's non-public PlayerAnimatorAssetManager.
+- CustomNPCs GBPort supplies NPC entities and classic player-model variants.
+- DominionSword is optional and accessed only through reflective, read-only
+  compatibility bridges.

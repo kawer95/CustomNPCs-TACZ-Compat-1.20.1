@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.arxyt.customnpcstaczcompat.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "customnpcs_tacz_compat.refmap.json",
+  "mixins": [
+    "EntityAIRangedAttackMixin",
+    "EntityNpcItemCapabilityMixin",
+    "EntityNPCInterfaceMixin"
+  ],
+  "client": [
+    "client.ModelClassicPlayerMixin",
+    "client.PlayerModelMixin",
+    "client.RenderNPCInterfaceMixin",
+    "client.TaczBulletRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
