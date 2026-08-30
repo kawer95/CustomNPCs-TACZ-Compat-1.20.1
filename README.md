@@ -14,7 +14,7 @@ Install on clients only:
 
 - PlayerAnimator `1.0.2-rc1+1.20` or newer
 
-DominionSword `1.31.0` or newer is optional. It supplies command queue, watch, prone, and target-acquisition coordination when present; ordinary native CNPC gun AI remains active without it.
+DominionSword `1.32.42` or newer is optional. It supplies command queue, watch, prone, and target-acquisition coordination when present; ordinary native CNPC gun AI remains active without it.
 
 The release jar never bundles or relocates PlayerAnimator. `mods.toml` intentionally specifies lower bounds without an upper bound: its Gradle versions are only a tested compile baseline, not an installation lock.
 

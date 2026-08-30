@@ -60,6 +60,14 @@ public final class NativeGunDiagnostics {
                 gun.drawCooldown(), gun.shootCooldown(), gun.bolting(), gun.sprinting());
     }
 
+    /** Confirms that a new Ctrl/area queue discarded only stale first-target reaction state. */
+    public static void attackQueueStarted(EntityNPCInterface npc) {
+        if (npc == null) return;
+        CustomNpcsTaczCompat.LOGGER.info(
+                "[CNPC-TACZ-ATTACK-QUEUE] npcId={} tick={} action=clear_stale_first_target_reaction",
+                npc.getId(), npc.tickCount);
+    }
+
     private static State state(EntityNPCInterface npc) {
         synchronized (STATES) {
             return STATES.computeIfAbsent(npc, ignored -> new State());

@@ -47,6 +47,6 @@ side="CLIENT"
 [[dependencies."${mod_id}"]]
 modId="dominionsword"
 mandatory=false
-versionRange="[1.32.35,)"
+versionRange="[1.32.42,)"
 ordering="AFTER"
 side="BOTH"

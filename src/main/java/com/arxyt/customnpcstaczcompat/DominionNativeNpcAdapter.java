@@ -28,6 +28,18 @@ public final class DominionNativeNpcAdapter implements DominionUnitAdapter {
         return entity instanceof EntityNPCInterface npc && NativeNpcEligibility.active(npc);
     }
 
+    /**
+     * A new Ctrl/area command must never inherit the prior command's dead-target reaction
+     * window.  Dominion does not invoke this while an existing queue advances, so the intended
+     * tactical pause between successor targets remains intact.
+     */
+    @Override
+    public void attackQueueStarted(ServerPlayer player, Entity entity) {
+        if (!(entity instanceof EntityNPCInterface npc) || !NativeNpcEligibility.active(npc)) return;
+        NativeNpcTargetReaction.clear(npc);
+        NativeGunDiagnostics.attackQueueStarted(npc);
+    }
+
     @Override
     public boolean beginOfflineTask(ServerPlayer player, Entity entity) {
         return entity instanceof EntityNPCInterface npc && NativeNpcEligibility.active(npc);
