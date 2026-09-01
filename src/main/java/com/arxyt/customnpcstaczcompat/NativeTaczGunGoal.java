@@ -178,7 +178,8 @@ public final class NativeTaczGunGoal extends Goal {
     }
 
     private double range(DominionCommandBridge.Snapshot command) {
-        if (command.watching()) return DominionCommandBridge.watchRange(npc, 64.0D);
+        if (command.watching()) return DominionCommandBridge.watchRange(npc,
+                Math.max(2.0D, npc.stats.ranged.getRange() * 2.0D));
         if (command.active()) return Math.max(1.0D, npc.stats.ranged.getRange());
         return switch (NativeGunRuntime.tacz().rangeClass(npc.getMainHandItem())) {
             case NEAR -> Math.min(NativeGunConfig.NEAR_DISTANCE.get(), npc.stats.aggroRange);
