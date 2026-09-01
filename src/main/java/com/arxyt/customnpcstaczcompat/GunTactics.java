@@ -6,6 +6,11 @@ public final class GunTactics {
 
     private GunTactics() { }
 
+    /** Settles a commanded shooter safely inside its hard firing limit. */
+    public static double commandedApproachDistance(double firingRange) {
+        return Math.max(1.0D, firingRange * 0.9D);
+    }
+
     public static Maneuver decide(boolean canSee, double distance, double range, boolean closeQuarters) {
         double safeRange = Math.max(1.0D, range);
         if (!canSee || distance > safeRange) return Maneuver.PURSUE;

@@ -18,6 +18,14 @@ public final class NativeGunLogicCheck {
                 "close native target should trigger retreat");
         check(GunTactics.decide(true, 6.0D, 32.0D, true) == GunTactics.Maneuver.HOLD,
                 "close-quarters command must suppress retreat");
+        check(Math.abs(GunTactics.commandedApproachDistance(15.0D) - 13.5D) < 0.0001D,
+                "command pursuit must settle inside the CNPC firing limit");
+        check(GunTactics.decideControlled(true, true, 14.0D,
+                        GunTactics.commandedApproachDistance(15.0D), false, false)
+                        == GunTactics.Maneuver.PURSUE,
+                "command pursuit must not stop at the hard fire boundary");
+        check(GunTactics.canFire(false, true, 14.0D, 15.0D),
+                "the hard CNPC firing range remains authoritative while settling");
         check(!GunTactics.canFire(true, false, 200.0D, 32.0D), "prone does not shoot through walls");
         check(GunTactics.canFire(true, true, 200.0D, 32.0D), "prone may fire past preferred range");
         check(NpcCrawlState.CRAWL_ANIMATION == 7, "GBPort crawl animation contract changed");

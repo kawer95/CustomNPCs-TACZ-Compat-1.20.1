@@ -2,6 +2,7 @@ package com.arxyt.customnpcstaczcompat;
 
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import noppes.npcs.entity.EntityNPCInterface;
 
 import java.util.Collections;
@@ -28,13 +29,19 @@ public final class NpcGunAimLock {
      * physically caught up; this prevents a first bullet from leaving before its visual aim.
      */
     public static boolean prepareForShot(EntityNPCInterface npc, LivingEntity target, boolean commanded) {
-        AimSolution solution = solve(npc, target);
+        return prepareForShot(npc, target, commanded, target == null ? null : target.getEyePosition());
+    }
+
+    /** Uses the exact world-space point that passed the corresponding visibility test. */
+    public static boolean prepareForShot(EntityNPCInterface npc, LivingEntity target, boolean commanded,
+                                         Vec3 aimPoint) {
+        AimSolution solution = solve(npc, target, aimPoint);
         if (solution == null) return false;
         AimState previous = STATES.get(npc);
         boolean changedTarget = previous == null || !previous.targetId().equals(solution.targetId());
         int readyAtTick = nextReadyTick(changedTarget, npc.tickCount,
                 previous == null ? Integer.MIN_VALUE : previous.readyAtTick());
-        AimState state = new AimState(solution.targetId(), target, solution, readyAtTick, commanded,
+        AimState state = new AimState(solution.targetId(), target, aimPoint, solution, readyAtTick, commanded,
                 previous == null ? Integer.MIN_VALUE : previous.lastSteeredTick(),
                 previous == null ? Integer.MIN_VALUE : previous.lastDiagnosticTick(),
                 changedTarget || previous == null ? Integer.MIN_VALUE : previous.lastSynchronizedTick());
@@ -71,10 +78,14 @@ public final class NpcGunAimLock {
     }
 
     static AimSolution solve(EntityNPCInterface npc, LivingEntity target) {
-        if (npc == null || target == null || !target.isAlive()) return null;
-        double dx = target.getX() - npc.getX();
-        double dy = target.getEyeY() - npc.getEyeY();
-        double dz = target.getZ() - npc.getZ();
+        return solve(npc, target, target == null ? null : target.getEyePosition());
+    }
+
+    static AimSolution solve(EntityNPCInterface npc, LivingEntity target, Vec3 aimPoint) {
+        if (npc == null || target == null || !target.isAlive() || aimPoint == null) return null;
+        double dx = aimPoint.x - npc.getX();
+        double dy = aimPoint.y - npc.getEyeY();
+        double dz = aimPoint.z - npc.getZ();
         double horizontal = Math.sqrt(dx * dx + dz * dz);
         if (!Double.isFinite(horizontal) || horizontal < 1.0E-6D || !Double.isFinite(dy)) return null;
         float yaw = (float) -Math.toDegrees(Math.atan2(dx, dz));
@@ -177,7 +188,7 @@ public final class NpcGunAimLock {
      * tracking runs. A compact packet mirrors every rendered rotation field immediately.
      */
     private static void lockAndSynchronize(EntityNPCInterface npc, AimState state, LivingEntity target) {
-        AimSolution solution = solve(npc, target);
+        AimSolution solution = solve(npc, target, state.aimPoint());
         if (solution == null) return;
         state.solution = solution;
         float yaw = solution.yaw();
@@ -223,6 +234,7 @@ public final class NpcGunAimLock {
     private static final class AimState {
         private final UUID targetId;
         private final LivingEntity target;
+        private final Vec3 aimPoint;
         private AimSolution solution;
         private final int readyAtTick;
         private final boolean commanded;
@@ -230,11 +242,12 @@ public final class NpcGunAimLock {
         private int lastDiagnosticTick;
         private int lastSynchronizedTick;
 
-        private AimState(UUID targetId, LivingEntity target, AimSolution solution, int readyAtTick,
+        private AimState(UUID targetId, LivingEntity target, Vec3 aimPoint, AimSolution solution, int readyAtTick,
                          boolean commanded, int lastSteeredTick, int lastDiagnosticTick,
                          int lastSynchronizedTick) {
             this.targetId = targetId;
             this.target = target;
+            this.aimPoint = aimPoint;
             this.solution = solution;
             this.readyAtTick = readyAtTick;
             this.commanded = commanded;
@@ -245,6 +258,7 @@ public final class NpcGunAimLock {
 
         private UUID targetId() { return targetId; }
         private LivingEntity target() { return target; }
+        private Vec3 aimPoint() { return aimPoint; }
         private AimSolution solution() { return solution; }
         private int readyAtTick() { return readyAtTick; }
         private boolean commanded() { return commanded; }

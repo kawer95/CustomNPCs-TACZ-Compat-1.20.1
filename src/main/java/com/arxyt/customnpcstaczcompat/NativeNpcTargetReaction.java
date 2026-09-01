@@ -83,6 +83,14 @@ public final class NativeNpcTargetReaction {
         npc.getPersistentData().putUUID(LAST_TARGET, target.getUUID());
     }
 
+    /** Counts a long reload as the reaction window for the already selected successor target. */
+    public static void satisfyDuringReload(EntityNPCInterface npc, LivingEntity target,
+                                           DominionCombatBalance.Settings settings) {
+        if (npc == null || target == null || !target.isAlive()) return;
+        noteTarget(npc, target, settings);
+        clearWindow(npc.getPersistentData());
+    }
+
     /** Removes only this companion's NBT state. */
     public static void clear(EntityNPCInterface npc) {
         if (npc == null) return;

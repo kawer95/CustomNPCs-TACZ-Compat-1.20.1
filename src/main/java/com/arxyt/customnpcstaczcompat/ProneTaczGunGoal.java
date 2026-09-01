@@ -3,6 +3,7 @@ package com.arxyt.customnpcstaczcompat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import noppes.npcs.entity.EntityNPCInterface;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
 
@@ -28,6 +29,7 @@ public final class ProneTaczGunGoal extends Goal {
         if (target == null) { NativeGunRuntime.tacz().continueWatchFire(npc); return; }
         double distance = npc.distanceTo(target);
         if (DominionCommandBridge.isReloadActive(npc)) {
+            NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "PRONE", "DOMINION_RELOAD_ACTIVE", command, target,
                     false, false, false, distance, Double.POSITIVE_INFINITY, cooldown);
             return;
@@ -43,11 +45,12 @@ public final class ProneTaczGunGoal extends Goal {
         }
         NativeNpcTargetReaction.noteTarget(npc, target, settings);
         npc.getLookControl().setLookAt(target, 90.0F, 90.0F);
-        boolean aimReady = NpcGunAimLock.prepareForShot(npc, target, true);
         boolean vanillaCanSee = npc.getSensing().hasLineOfSight(target);
-        boolean watchClearShot = command.watching()
-                && DominionCommandBridge.watchHasClearShot(npc, target, vanillaCanSee);
-        boolean canSee = GunTactics.effectiveLineOfSight(command.watching(), vanillaCanSee, watchClearShot);
+        Vec3 aimPoint = command.watching()
+                ? DominionCommandBridge.watchAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
+                : target.getEyePosition();
+        boolean canSee = command.watching() ? aimPoint != null : vanillaCanSee;
+        boolean aimReady = canSee && NpcGunAimLock.prepareForShot(npc, target, true, aimPoint);
         // Prone commands deliberately ignore the normal ranged-AI distance cap, but never shoot
         // through terrain or before the first target-facing orientation has synchronized.
         if (!aimReady) {

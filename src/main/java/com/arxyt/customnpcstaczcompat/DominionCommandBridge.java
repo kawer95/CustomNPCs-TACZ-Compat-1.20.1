@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.phys.Vec3;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -45,8 +46,10 @@ public final class DominionCommandBridge {
                     optionalUnreflect(lookup, api, "commandMovementSpeed", Mob.class),
                     optionalUnreflect(lookup, api, "watchRange", Mob.class, int.class),
                     optionalUnreflect(lookup, api, "watchHasClearShot", Mob.class, LivingEntity.class),
+                    optionalUnreflect(lookup, api, "watchAimPoint", Mob.class, LivingEntity.class),
                     optionalUnreflect(lookup, watchService, "continuousFireRequested", Mob.class),
-                    optionalUnreflect(lookup, reloadApi, "isReloadActive", Mob.class));
+                    optionalUnreflect(lookup, reloadApi, "isReloadActive", Mob.class),
+                    optionalUnreflect(lookup, reloadApi, "requestReload", Mob.class));
             CustomNpcsTaczCompat.LOGGER.info("Dominion Sword command coordination enabled for native CNPCs");
         } catch (ReflectiveOperationException | LinkageError error) {
             report(error);
@@ -138,6 +141,20 @@ public final class DominionCommandBridge {
         }
     }
 
+    /** Returns the same target point that passed Dominion's multi-point watch ray test. */
+    public static Vec3 watchAimPoint(Mob unit, LivingEntity target, Vec3 fallback) {
+        Access current = access;
+        if (current == null || current.watchAimPoint == null || unit == null || target == null
+                || unit.level().isClientSide) return fallback;
+        try {
+            Object value = current.watchAimPoint.invoke(unit, target);
+            return value instanceof Vec3 point ? point : null;
+        } catch (Throwable error) {
+            report(error);
+            return fallback;
+        }
+    }
+
     /** Lets all native gun goals yield while Dominion's shared reload service owns TaCZ state. */
     public static boolean isReloadActive(Mob unit) {
         Access current = access;
@@ -145,6 +162,19 @@ public final class DominionCommandBridge {
         try {
             Object value = current.reloadActive.invoke(unit);
             return value instanceof Boolean active && active;
+        } catch (Throwable error) {
+            report(error);
+            return false;
+        }
+    }
+
+    /** Requests a reload owned and tracked by Dominion; false keeps standalone fallback viable. */
+    public static boolean requestReload(Mob unit) {
+        Access current = access;
+        if (current == null || current.requestReload == null || unit == null || unit.level().isClientSide) return false;
+        try {
+            Object value = current.requestReload.invoke(unit);
+            return value instanceof Boolean accepted && accepted;
         } catch (Throwable error) {
             report(error);
             return false;
@@ -217,7 +247,8 @@ public final class DominionCommandBridge {
                           MethodHandle autonomousMovementBlocked, MethodHandle nativeApproachBlocked,
                           MethodHandle closeQuarters, MethodHandle prone, MethodHandle watching,
                           MethodHandle attackTarget, MethodHandle movementSpeed, MethodHandle watchRange,
-                          MethodHandle watchHasClearShot, MethodHandle watchContinuousFire,
-                          MethodHandle reloadActive) {
+                          MethodHandle watchHasClearShot, MethodHandle watchAimPoint,
+                          MethodHandle watchContinuousFire, MethodHandle reloadActive,
+                          MethodHandle requestReload) {
     }
 }

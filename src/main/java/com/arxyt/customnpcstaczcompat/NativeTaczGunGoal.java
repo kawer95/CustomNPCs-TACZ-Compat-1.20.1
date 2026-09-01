@@ -3,6 +3,7 @@ package com.arxyt.customnpcstaczcompat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import noppes.npcs.entity.EntityNPCInterface;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
 
@@ -62,6 +63,7 @@ public final class NativeTaczGunGoal extends Goal {
         if (command.active()) npc.setSprinting(false);
         LivingEntity target = target(command);
         if (DominionCommandBridge.isReloadActive(npc)) {
+            NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "REGULAR", "DOMINION_RELOAD_ACTIVE", command, target,
                     false, false, false, target == null ? Double.NaN : npc.distanceTo(target), range(command), cooldown);
             hold(command);
@@ -82,14 +84,15 @@ public final class NativeTaczGunGoal extends Goal {
         npc.getLookControl().setLookAt(target, 90.0F, 90.0F);
         // A new target gets one replicated server tick before its first projectile. The facade
         // consumes this exact same solution, so model, muzzle and bullet cannot disagree.
-        boolean aimReady = NpcGunAimLock.prepareForShot(npc, target, command.commandedAttack());
-
         double desired = range(command);
         double distance = npc.distanceTo(target);
         boolean vanillaCanSee = npc.getSensing().hasLineOfSight(target);
-        boolean watchClearShot = command.watching()
-                && DominionCommandBridge.watchHasClearShot(npc, target, vanillaCanSee);
-        boolean canSee = GunTactics.effectiveLineOfSight(command.watching(), vanillaCanSee, watchClearShot);
+        Vec3 aimPoint = command.watching()
+                ? DominionCommandBridge.watchAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
+                : target.getEyePosition();
+        boolean canSee = command.watching() ? aimPoint != null : vanillaCanSee;
+        boolean aimReady = canSee && NpcGunAimLock.prepareForShot(npc, target,
+                command.commandedAttack(), aimPoint);
         maneuver(command, target, canSee, distance, desired);
 
         boolean canFire = command.watching()
@@ -122,7 +125,8 @@ public final class NativeTaczGunGoal extends Goal {
         }
         if (command.active()) {
             GunTactics.Maneuver maneuver = command.watching() ? GunTactics.Maneuver.SENTRY
-                    : GunTactics.decideControlled(command.commandedAttack(), canSee, distance, range,
+                    : GunTactics.decideControlled(command.commandedAttack(), canSee, distance,
+                    GunTactics.commandedApproachDistance(range),
                     command.closeQuarters(), command.prone());
             switch (maneuver) {
                 case PURSUE -> {

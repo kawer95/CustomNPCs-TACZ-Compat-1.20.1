@@ -131,6 +131,10 @@ public final class NativeTaczGunFacade {
                     warnCommanderAmmoMissing(shooter);
                     yield Action.waitFor(20);
                 }
+                if (DominionCommandBridge.requestReload(shooter)) {
+                    yield Action.waitFor(1);
+                }
+                // Standalone fallback when Dominion is not installed or does not own this unit.
                 operator.reload();
                 float reload = data.getReloadData() == null || data.getReloadData().getCooldown() == null
                         ? 1.0F : data.getReloadData().getCooldown().getEmptyTime();

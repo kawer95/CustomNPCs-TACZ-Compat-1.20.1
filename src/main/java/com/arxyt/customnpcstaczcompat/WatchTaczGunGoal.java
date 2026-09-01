@@ -3,6 +3,7 @@ package com.arxyt.customnpcstaczcompat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
 import noppes.npcs.entity.EntityNPCInterface;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
 
@@ -29,6 +30,7 @@ public final class WatchTaczGunGoal extends Goal {
         double distance = npc.distanceTo(target);
         double range = DominionCommandBridge.watchRange(npc, 64.0D);
         if (DominionCommandBridge.isReloadActive(npc)) {
+            NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "WATCH", "DOMINION_RELOAD_ACTIVE", command, target,
                     false, false, false, distance, range, cooldown);
             return;
@@ -44,10 +46,11 @@ public final class WatchTaczGunGoal extends Goal {
         }
         NativeNpcTargetReaction.noteTarget(npc, target, settings);
         npc.getLookControl().setLookAt(target, 90.0F, 90.0F);
-        boolean aimReady = NpcGunAimLock.prepareForShot(npc, target, true);
         boolean vanillaCanSee = npc.getSensing().hasLineOfSight(target);
-        boolean canSee = GunTactics.effectiveLineOfSight(true, vanillaCanSee,
-                DominionCommandBridge.watchHasClearShot(npc, target, vanillaCanSee));
+        Vec3 aimPoint = DominionCommandBridge.watchAimPoint(npc, target,
+                vanillaCanSee ? target.getEyePosition() : null);
+        boolean canSee = aimPoint != null;
+        boolean aimReady = canSee && NpcGunAimLock.prepareForShot(npc, target, true, aimPoint);
         if (!aimReady) {
             NativeGunDiagnostics.gate(npc, "WATCH", "AIM_LOCK_NOT_READY", command, target,
                     false, vanillaCanSee, canSee, distance, range, cooldown);
