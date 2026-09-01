@@ -40,6 +40,8 @@ public final class NativeTaczGunFacade {
             Collections.synchronizedMap(new WeakHashMap<>());
     private final Map<EntityNPCInterface, Integer> lastAmmoWarning =
             Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<EntityNPCInterface, WatchTriggerState> watchTriggers =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public boolean isMachineGun(ItemStack stack) {
         return gunIndex(stack).map(index -> GunTabType.MG.name().equalsIgnoreCase(index.getType())).orElse(false);
@@ -54,6 +56,15 @@ public final class NativeTaczGunFacade {
     }
 
     public Action operate(EntityNPCInterface shooter, LivingEntity target) {
+        watchTriggers.remove(shooter);
+        return operate(shooter, target, false);
+    }
+
+    public Action operateWatch(EntityNPCInterface shooter, LivingEntity target) {
+        return operate(shooter, target, true);
+    }
+
+    private Action operate(EntityNPCInterface shooter, LivingEntity target, boolean watchFire) {
         ItemStack stack = shooter.getMainHandItem();
         IGun gun = IGun.getIGunOrNull(stack);
         Optional<CommonGunIndex> index = gunIndex(stack);
@@ -87,12 +98,16 @@ public final class NativeTaczGunFacade {
                 balance.available() && balance.customNpcStandingMachineGunAccuracyPenalty(), machineGun,
                 sniperRifle, operator.getDataHolder().isCrawling);
         float adjustedYaw = aim.yaw() + accuracyError(shooter, target, horizontalDistance, effectiveAccuracy);
-        ShootResult result = operator.shoot(aim::pitch, () -> adjustedYaw);
+        ShootResult result = watchFire && DominionCommandBridge.watchContinuousFireRequested(shooter) && machineGun
+                ? heldTriggerShoot(shooter, operator, gun, stack, data, aim.pitch(), adjustedYaw)
+                : operator.shoot(aim::pitch, () -> adjustedYaw);
         if (result == ShootResult.IS_SPRINTING) {
             // A later hook may have rebuilt the transition after the first preparation. Do not
             // turn that compatibility race into a one-or-two-second first-shot delay.
             prepareImmediateFire(shooter, operator);
-            result = operator.shoot(aim::pitch, () -> adjustedYaw);
+            result = watchFire && DominionCommandBridge.watchContinuousFireRequested(shooter) && machineGun
+                    ? heldTriggerShoot(shooter, operator, gun, stack, data, aim.pitch(), adjustedYaw)
+                    : operator.shoot(aim::pitch, () -> adjustedYaw);
         }
         NativeGunDiagnostics.operate(shooter, target, "SHOOT_" + result.name());
         if (transientFailure(result)) {
@@ -129,12 +144,54 @@ public final class NativeTaczGunFacade {
         };
     }
 
+    public Action continueWatchFire(EntityNPCInterface shooter) {
+        WatchTriggerState state = watchTriggers.get(shooter);
+        ItemStack stack = shooter.getMainHandItem();
+        IGun gun = IGun.getIGunOrNull(stack);
+        Optional<CommonGunIndex> index = gunIndex(stack);
+        if (state == null || gun == null || index.isEmpty() || !isMachineGun(stack)
+                || !DominionCommandBridge.watchContinuousFireRequested(shooter)) {
+            watchTriggers.remove(shooter);
+            return Action.waitFor(1);
+        }
+        IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
+        prepareImmediateFire(shooter, operator);
+        ShootResult result = heldTriggerShoot(shooter, operator, gun, stack, index.get().getGunData(), state.pitch, state.yaw);
+        return new Action(1, result == ShootResult.SUCCESS);
+    }
+
+    private ShootResult heldTriggerShoot(EntityNPCInterface shooter, IGunOperator operator, IGun gun,
+                                         ItemStack stack, GunData data, float pitch, float yaw) {
+        String key = String.valueOf(gun.getGunId(stack));
+        WatchTriggerState state = watchTriggers.computeIfAbsent(shooter, ignored -> new WatchTriggerState());
+        if (!key.equals(state.gunKey)) { state.gunKey = key; state.chargeProgress = 0.0F; }
+        state.pitch = pitch;
+        state.yaw = yaw;
+        ChargeView charge = chargeData(data, gun.getFireMode(stack));
+        if (charge == null) return operator.shoot(() -> pitch, () -> yaw);
+        state.chargeProgress = Math.min(charge.maxCharge,
+                state.chargeProgress + Math.max(0.0F, charge.increasePerTick));
+        float threshold = charge.autoOrDelay() ? charge.maxCharge : charge.fireThreshold;
+        if (state.chargeProgress + 0.001F < threshold) return ShootResult.COOL_DOWN;
+        long timestamp = System.currentTimeMillis() - operator.getDataHolder().baseTimestamp;
+        ShootResult result = chargedShoot(operator, () -> pitch, () -> yaw, timestamp, state.chargeProgress);
+        if (result == ShootResult.SUCCESS) {
+            state.chargeProgress = charge.delay() ? 0.0F
+                    : Math.max(0.0F, state.chargeProgress - charge.decreaseOnFire);
+        } else if (result == ShootResult.NO_AMMO || result == ShootResult.IS_RELOADING
+                || result == ShootResult.IS_DRAWING || result == ShootResult.IS_BOLTING) {
+            state.chargeProgress = 0.0F;
+        }
+        return result;
+    }
+
     public void stop(EntityNPCInterface shooter, boolean forceExitAim) {
         failures.remove(shooter);
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
         if (operator.getSynIsAiming() && (forceExitAim || !DominionCommandBridge.hasQueuedAttack(shooter))) {
             operator.aim(false);
         }
+        if (forceExitAim || !DominionCommandBridge.watchContinuousFireRequested(shooter)) watchTriggers.remove(shooter);
     }
 
     /** Mirrors the visible CNPC crawl animation into TaCZ only when the weapon accepts it. */
@@ -242,4 +299,38 @@ public final class NativeTaczGunFacade {
     }
 
     private record FailureState(ShootResult result, int sinceTick) { }
+    private static final class WatchTriggerState {
+        private String gunKey = "";
+        private float pitch;
+        private float yaw;
+        private float chargeProgress;
+    }
+    private static ChargeView chargeData(GunData data, FireMode mode) {
+        try {
+            Object charge = data.getClass().getMethod("getChargeData", FireMode.class).invoke(data, mode);
+            if (charge == null) return null;
+            Class<?> type = charge.getClass();
+            return new ChargeView(number(type, charge, "getMaxCharge"), number(type, charge, "getIncreasePerTick"),
+                    number(type, charge, "getFireThreshold"), number(type, charge, "getDecreaseOnFire"),
+                    String.valueOf(type.getMethod("getChargeType").invoke(charge)));
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) { return null; }
+    }
+    private static float number(Class<?> type, Object value, String method) throws ReflectiveOperationException {
+        return ((Number) type.getMethod(method).invoke(value)).floatValue();
+    }
+    private static ShootResult chargedShoot(IGunOperator operator, java.util.function.Supplier<Float> pitch,
+                                             java.util.function.Supplier<Float> yaw, long timestamp, float progress) {
+        try {
+            Object result = operator.getClass().getMethod("shoot", java.util.function.Supplier.class,
+                    java.util.function.Supplier.class, long.class, float.class)
+                    .invoke(operator, pitch, yaw, timestamp, progress);
+            if (result instanceof ShootResult shootResult) return shootResult;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) { }
+        return operator.shoot(pitch, yaw, timestamp);
+    }
+    private record ChargeView(float maxCharge, float increasePerTick, float fireThreshold,
+                              float decreaseOnFire, String type) {
+        boolean autoOrDelay() { return "AUTO".equals(type) || "DELAY".equals(type); }
+        boolean delay() { return "DELAY".equals(type); }
+    }
 }

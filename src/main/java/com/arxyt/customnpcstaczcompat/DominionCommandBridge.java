@@ -29,6 +29,7 @@ public final class DominionCommandBridge {
             ClassLoader loader = DominionCommandBridge.class.getClassLoader();
             Class<?> api = Class.forName("com.arxyt.dominionsword.api.DominionControlApi", false, loader);
             Class<?> reloadApi = optionalClass("com.arxyt.dominionsword.api.DominionTaczReloadApi", loader);
+            Class<?> watchService = optionalClass("com.arxyt.dominionsword.control.WatchService", loader);
             Class<?> view = Class.forName("com.arxyt.dominionsword.api.DominionUnitCommandView", false, loader);
             MethodHandles.Lookup lookup = MethodHandles.publicLookup();
             access = new Access(
@@ -44,6 +45,7 @@ public final class DominionCommandBridge {
                     optionalUnreflect(lookup, api, "commandMovementSpeed", Mob.class),
                     optionalUnreflect(lookup, api, "watchRange", Mob.class, int.class),
                     optionalUnreflect(lookup, api, "watchHasClearShot", Mob.class, LivingEntity.class),
+                    optionalUnreflect(lookup, watchService, "continuousFireRequested", Mob.class),
                     optionalUnreflect(lookup, reloadApi, "isReloadActive", Mob.class));
             CustomNpcsTaczCompat.LOGGER.info("Dominion Sword command coordination enabled for native CNPCs");
         } catch (ReflectiveOperationException | LinkageError error) {
@@ -149,6 +151,18 @@ public final class DominionCommandBridge {
         }
     }
 
+    public static boolean watchContinuousFireRequested(Mob unit) {
+        Access current = access;
+        if (current == null || current.watchContinuousFire == null || unit == null || unit.level().isClientSide) return false;
+        try {
+            Object value = current.watchContinuousFire.invoke(unit);
+            return value instanceof Boolean active && active;
+        } catch (Throwable error) {
+            report(error);
+            return false;
+        }
+    }
+
     static boolean isDirectSingleTargetAttack(String order, boolean hasDirectTarget) {
         return ATTACK_ORDER.equals(order) && hasDirectTarget;
     }
@@ -203,6 +217,7 @@ public final class DominionCommandBridge {
                           MethodHandle autonomousMovementBlocked, MethodHandle nativeApproachBlocked,
                           MethodHandle closeQuarters, MethodHandle prone, MethodHandle watching,
                           MethodHandle attackTarget, MethodHandle movementSpeed, MethodHandle watchRange,
-                          MethodHandle watchHasClearShot, MethodHandle reloadActive) {
+                          MethodHandle watchHasClearShot, MethodHandle watchContinuousFire,
+                          MethodHandle reloadActive) {
     }
 }

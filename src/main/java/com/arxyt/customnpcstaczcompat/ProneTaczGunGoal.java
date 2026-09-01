@@ -16,16 +16,16 @@ public final class ProneTaczGunGoal extends Goal {
         setFlags(EnumSet.of(Flag.LOOK));
     }
 
-    @Override public boolean canUse() { return target(DominionCommandBridge.snapshot(npc)) != null; }
-    @Override public boolean canContinueToUse() { return target(DominionCommandBridge.snapshot(npc)) != null; }
+    @Override public boolean canUse() { var command=DominionCommandBridge.snapshot(npc); return target(command)!=null||continuousSession(command); }
+    @Override public boolean canContinueToUse() { var command=DominionCommandBridge.snapshot(npc); return target(command)!=null||continuousSession(command); }
     @Override public boolean requiresUpdateEveryTick() { return true; }
     @Override public void start() { cooldown = 0; }
 
     @Override public void tick() {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
         LivingEntity target = target(command);
-        if (target == null) return;
         stationary();
+        if (target == null) { NativeGunRuntime.tacz().continueWatchFire(npc); return; }
         double distance = npc.distanceTo(target);
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeGunDiagnostics.gate(npc, "PRONE", "DOMINION_RELOAD_ACTIVE", command, target,
@@ -36,7 +36,9 @@ public final class ProneTaczGunGoal extends Goal {
         if (NativeNpcTargetReaction.blocks(npc, target, settings, command.directAttackOrder())) {
             NativeGunDiagnostics.gate(npc, "PRONE", "TARGET_REACTION_DELAY", command, target,
                     false, false, false, distance, Double.POSITIVE_INFINITY, cooldown);
-            NativeGunRuntime.tacz().stop(npc, false);
+            if (continuousSession(command)) NativeGunRuntime.tacz().continueWatchFire(npc);
+            else NativeGunRuntime.tacz().stop(npc, false);
+            if (continuousSession(command)) NativeGunRuntime.tacz().continueWatchFire(npc);
             return;
         }
         NativeNpcTargetReaction.noteTarget(npc, target, settings);
@@ -56,14 +58,17 @@ public final class ProneTaczGunGoal extends Goal {
         if (!canSee) {
             NativeGunDiagnostics.gate(npc, "PRONE", "NO_CLEAR_SHOT", command, target,
                     true, vanillaCanSee, false, distance, Double.POSITIVE_INFINITY, cooldown);
+            if (continuousSession(command)) NativeGunRuntime.tacz().continueWatchFire(npc);
             return;
         }
-        if (--cooldown > 0) {
+        boolean continuous = continuousSession(command) && NativeGunRuntime.tacz().isMachineGun(npc.getMainHandItem());
+        if (!continuous && --cooldown > 0) {
             NativeGunDiagnostics.gate(npc, "PRONE", "GOAL_COOLDOWN", command, target,
                     true, vanillaCanSee, true, distance, Double.POSITIVE_INFINITY, cooldown);
             return;
         }
-        cooldown = NativeGunRuntime.tacz().operate(npc, target).delayTicks();
+        cooldown = continuous ? NativeGunRuntime.tacz().operateWatch(npc, target).delayTicks()
+                : NativeGunRuntime.tacz().operate(npc, target).delayTicks();
     }
 
     @Override public void stop() { stationary(); NativeGunRuntime.tacz().stop(npc, false); }
@@ -78,5 +83,10 @@ public final class ProneTaczGunGoal extends Goal {
         LivingEntity target = command.attackTarget();
         return NativeNpcEligibility.active(npc) && command.commandedAttack() && command.prone()
                 && target != null && target != npc && target.isAlive() ? target : null;
+    }
+
+    private boolean continuousSession(DominionCommandBridge.Snapshot command) {
+        return NativeNpcEligibility.active(npc) && command.prone() && command.watching()
+                && DominionCommandBridge.watchContinuousFireRequested(npc);
     }
 }
