@@ -224,7 +224,7 @@ public final class NativeNpcAnimationController {
         // whole stack here restarts the walk fade every replay, which looks like a flickering
         // sliding model. The render path resets loop layers only when its animator resource id
         // actually changes; this event needs to discard only a stale one-shot action.
-        clearOnce(npc);
+        clearOnceUnlessReloading(npc);
     }
 
     private static void safePlayOnce(EntityNPCInterface npc, ItemStack stack, String name,
@@ -273,10 +273,8 @@ public final class NativeNpcAnimationController {
             } else {
                 state.onceSpeed.speed = 1.0F;
             }
-            var playback = action == OnceAnimationArbitrator.Action.RELOAD
-                    ? holdLastFrame(animation.get()) : animation.get();
             state.once.replaceAnimationWithFade(AbstractFadeModifier.standardFadeIn(3, Ease.INOUTSINE),
-                    new KeyframeAnimationPlayer(playback));
+                    new KeyframeAnimationPlayer(animation.get()));
             state.onceAction = action;
         }
         return new OncePlayback(id, true, previous, previousActive, decision);
@@ -320,24 +318,6 @@ public final class NativeNpcAnimationController {
             }).orElse(1.0F);
         } catch (RuntimeException | LinkageError ignored) {
             return 1.0F;
-        }
-    }
-
-    /**
-     * A reload clip is visual state, not the authority that ends TaCZ reload.  Looping only its
-     * last keyframe keeps a scripted or packet-delayed reload posed without restarting the
-     * magazine manipulation from frame zero.  The synchronized ReloadState clears the layer.
-     */
-    private static dev.kosmx.playerAnim.core.data.KeyframeAnimation holdLastFrame(
-            dev.kosmx.playerAnim.core.data.KeyframeAnimation animation) {
-        try {
-            var builder = animation.mutableCopy();
-            builder.isLooped = true;
-            builder.returnTick = animation.endTick;
-            builder.stopTick = Integer.MAX_VALUE;
-            return builder.build();
-        } catch (RuntimeException error) {
-            return animation;
         }
     }
 
@@ -490,6 +470,14 @@ public final class NativeNpcAnimationController {
         if (state != null && npc.getUUID().equals(state.uuid)) state.clearOnce();
     }
 
+    /** A TaCZ synchronization draw replay must never restart an active reload clip. */
+    private static synchronized void clearOnceUnlessReloading(EntityNPCInterface npc) {
+        State state = STATES.get(npc.getId());
+        if (state == null || !npc.getUUID().equals(state.uuid)) return;
+        if (reloadActive(npc) || state.onceAction == OnceAnimationArbitrator.Action.RELOAD) return;
+        state.clearOnce();
+    }
+
     /**
      * GBPort's client-side NPC replica can keep a stale Entity#tickCount while its position,
      * world time and renderer continue normally.  Never use that per-entity counter for a
@@ -616,15 +604,16 @@ public final class NativeNpcAnimationController {
             if (!synchronizedReloadActive) {
                 synchronizedReloadActive = true;
                 if (reloadEventSeen) return;
-            } else if (onceAction == OnceAnimationArbitrator.Action.RELOAD && onceActive()) {
+            } else if (onceAction == OnceAnimationArbitrator.Action.RELOAD) {
                 return;
             }
             // Packet loss/order must not leave an NPC frozen in its hold pose for a successful
-            // server reload. Reload clips hold their last keyframe until this authoritative
-            // state ends, so this path is an edge fallback rather than a periodic replay.
+            // server reload. Do not loop or periodically replay an expired clip: SpeedModifier
+            // interpolation around an artificial final-frame loop produces visible recoil-like
+            // twitches. The matching base hold pose is the safe fallback until TaCZ ends reload.
             safePlayOnce(npc, stack, isProne(npc) ? "lie_reload" : "reload_upper",
                     OnceAnimationArbitrator.Action.RELOAD,
-                    reloadEventSeen ? "SYNC_RELOAD_ANIMATION_RECOVERY" : "SYNC_RELOAD_STATE_EDGE");
+                    reloadEventSeen ? "SYNC_RELOAD_STATE_RECOVERY" : "SYNC_RELOAD_STATE_EDGE");
         }
 
         private void setProneTarget(boolean prone) {
