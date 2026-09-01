@@ -76,16 +76,8 @@ public final class NativeTaczGunFacade {
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
         prepareImmediateFire(shooter, operator);
         String gunKey = String.valueOf(gun.getGunId(stack));
-        if (!gunKey.equals(equippedGuns.put(shooter, gunKey))) {
-            operator.draw(shooter::getMainHandItem);
-            NativeGunDiagnostics.operate(shooter, target, "DRAW_REQUESTED");
-            return Action.waitFor(seconds(data.getDrawTime()) + 2);
-        }
-        if (!operator.getSynIsAiming()) {
-            operator.aim(true);
-            NativeGunDiagnostics.operate(shooter, target, "ADS_REQUESTED");
-            return Action.waitFor(seconds(data.getAimTime()) + 2);
-        }
+        boolean gunChanged = !gunKey.equals(equippedGuns.put(shooter, gunKey));
+        prepareImmediateEngagement(shooter, operator, gunChanged);
 
         NpcGunAimLock.AimSolution aim = NpcGunAimLock.solutionFor(shooter, target);
         if (!aim.valid()) return Action.waitFor(1);
@@ -109,6 +101,14 @@ public final class NativeTaczGunFacade {
                     ? heldTriggerShoot(shooter, operator, gun, stack, data, aim.pitch(), adjustedYaw)
                     : operator.shoot(aim::pitch, () -> adjustedYaw);
         }
+        if (result == ShootResult.NOT_DRAW) {
+            // A late TaCZ capability reset must not reintroduce the old full draw delay.
+            // Rebind the already-visible main-hand gun and retry in this same server tick.
+            prepareImmediateEngagement(shooter, operator, true);
+            result = watchFire && DominionCommandBridge.watchContinuousFireRequested(shooter) && machineGun
+                    ? heldTriggerShoot(shooter, operator, gun, stack, data, aim.pitch(), adjustedYaw)
+                    : operator.shoot(aim::pitch, () -> adjustedYaw);
+        }
         NativeGunDiagnostics.operate(shooter, target, "SHOOT_" + result.name());
         if (transientFailure(result)) {
             if (failureTimedOut(shooter, result)) {
@@ -120,10 +120,7 @@ public final class NativeTaczGunFacade {
         }
         return switch (result) {
             case SUCCESS -> new Action(successDelay(gun, stack, shooter), true);
-            case NOT_DRAW -> {
-                operator.draw(shooter::getMainHandItem);
-                yield Action.waitFor(seconds(data.getDrawTime()) + 2);
-            }
+            case NOT_DRAW -> Action.waitFor(1);
             case NEED_BOLT -> {
                 operator.bolt();
                 yield Action.waitFor(seconds(data.getBoltActionTime()) + 2);
@@ -264,6 +261,19 @@ public final class NativeTaczGunFacade {
         shooter.setSprinting(false);
         operator.getDataHolder().sprintTimeS = 0.0F;
         operator.getDataHolder().sprintTimestamp = System.currentTimeMillis();
+    }
+
+    /**
+     * CNPC guns are already represented in the visible main hand, so a command must not replay
+     * the player hotbar draw delay. Reinitialization is limited to a real gun change or missing
+     * TaCZ binding; ADS is requested without delaying the authoritative server shot.
+     */
+    private static void prepareImmediateEngagement(EntityNPCInterface shooter, IGunOperator operator,
+                                                   boolean gunChanged) {
+        if (gunChanged || operator.getDataHolder().currentGunItem == null) operator.initialData();
+        operator.getDataHolder().drawTimestamp = -1L;
+        if (!operator.getDataHolder().isAiming) operator.aim(true);
+        if (gunChanged) NativeGunDiagnostics.operate(shooter, shooter.getTarget(), "IMMEDIATE_BIND_NO_DRAW");
     }
 
     static boolean transientFailure(ShootResult result) {
