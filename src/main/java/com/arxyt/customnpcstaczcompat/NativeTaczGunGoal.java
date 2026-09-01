@@ -14,6 +14,10 @@ public final class NativeTaczGunGoal extends Goal {
     private int strafeTime = -1;
     private boolean clockwise;
     private boolean backwards;
+    private double lastPursuitX;
+    private double lastPursuitZ;
+    private boolean pursuitPositionReady;
+    private int pursuitStalledTicks;
 
     public NativeTaczGunGoal(EntityNPCInterface npc) {
         this.npc = npc;
@@ -38,7 +42,12 @@ public final class NativeTaczGunGoal extends Goal {
     }
 
     @Override public boolean requiresUpdateEveryTick() { return true; }
-    @Override public void start() { cooldown = 0; strafeTime = -1; }
+    @Override public void start() {
+        cooldown = 0;
+        strafeTime = -1;
+        pursuitPositionReady = false;
+        pursuitStalledTicks = 0;
+    }
 
     @Override
     public void stop() {
@@ -136,7 +145,7 @@ public final class NativeTaczGunGoal extends Goal {
                     // clears it, together with TaCZ's cached sprint transition, only when this
                     // unit actually reaches a firing boundary.
                     npc.setSprinting(speed > 1.0D && !command.prone());
-                    npc.getNavigation().moveTo(target, speed);
+                    pursue(target, speed, distance, range);
                     npc.getMoveControl().strafe(0.0F, 0.0F);
                 }
                 case RETREAT -> {
@@ -151,7 +160,7 @@ public final class NativeTaczGunGoal extends Goal {
         }
         if (!canSee || distance > range) {
             strafeTime = -1;
-            npc.getNavigation().moveTo(target, 1.0D);
+            pursue(target, 1.0D, distance, range);
             return;
         }
         npc.getNavigation().stop();
@@ -167,7 +176,37 @@ public final class NativeTaczGunGoal extends Goal {
                 (float) (clockwise ? NativeGunConfig.SIDEWAYS_SPEED.get() : -NativeGunConfig.SIDEWAYS_SPEED.get()));
     }
 
+    /**
+     * Entity-target paths can finish at a stale target node and then remain "accepted" while the
+     * commanded shooter is still outside its firing range. Detect that exact state and rebuild a
+     * coordinate path. This preserves normal obstacle-aware navigation and never bypasses range.
+     */
+    private void pursue(LivingEntity target, double speed, double distance, double range) {
+        double movedSqr = pursuitPositionReady
+                ? (npc.getX() - lastPursuitX) * (npc.getX() - lastPursuitX)
+                + (npc.getZ() - lastPursuitZ) * (npc.getZ() - lastPursuitZ)
+                : Double.POSITIVE_INFINITY;
+        pursuitPositionReady = true;
+        lastPursuitX = npc.getX();
+        lastPursuitZ = npc.getZ();
+        if (movedSqr < 0.0001D) pursuitStalledTicks++;
+        else pursuitStalledTicks = 0;
+
+        boolean entityAccepted = npc.getNavigation().moveTo(target, speed);
+        boolean coordinateFallback = !entityAccepted
+                || pursuitStalledTicks >= 10 && npc.getNavigation().isDone();
+        boolean coordinateAccepted = false;
+        if (coordinateFallback) {
+            coordinateAccepted = npc.getNavigation().moveTo(
+                    target.getX(), target.getY(), target.getZ(), speed);
+        }
+        NativeGunDiagnostics.pursuit(npc, target, distance, range, speed, pursuitStalledTicks,
+                entityAccepted, coordinateFallback, coordinateAccepted);
+    }
+
     private void hold(DominionCommandBridge.Snapshot command) {
+        pursuitPositionReady = false;
+        pursuitStalledTicks = 0;
         if (command.active()) npc.setSprinting(false);
         npc.getNavigation().stop();
         npc.getMoveControl().strafe(0.0F, 0.0F);

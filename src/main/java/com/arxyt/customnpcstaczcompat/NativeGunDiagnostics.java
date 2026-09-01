@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.pathfinder.Path;
 import noppes.npcs.entity.EntityNPCInterface;
 
 import java.util.Collections;
@@ -68,6 +69,27 @@ public final class NativeGunDiagnostics {
                 npc.getId(), npc.tickCount);
     }
 
+    /** Records commanded pursuit acceptance and the path which actually survived the write. */
+    public static void pursuit(EntityNPCInterface npc, LivingEntity target, double distance, double range,
+                               double speed, int stalledTicks, boolean entityAccepted,
+                               boolean coordinateFallback, boolean coordinateAccepted) {
+        if (npc == null || target == null) return;
+        State state = state(npc);
+        String signature = entityAccepted + "|" + coordinateFallback + "|" + coordinateAccepted
+                + "|" + npc.getNavigation().isDone();
+        if (!state.shouldLogPursuit(npc.tickCount, signature, stalledTicks)) return;
+        Path path = npc.getNavigation().getPath();
+        String pathState = path == null ? "null"
+                : path.getNextNodeIndex() + "/" + path.getNodeCount() + ",done=" + path.isDone();
+        CustomNpcsTaczCompat.LOGGER.info(
+                "[CNPC-TACZ-PURSUIT] npcId={} tick={} target={} distance={} range={} speed={} stalledTicks={} entityAccepted={} coordinateFallback={} coordinateAccepted={} navDone={} path={} pos=({},{},{}) targetPos=({},{},{})",
+                npc.getId(), npc.tickCount, target.getUUID(), decimal(distance), decimal(range), decimal(speed),
+                stalledTicks, entityAccepted, coordinateFallback, coordinateAccepted,
+                npc.getNavigation().isDone(), pathState,
+                decimal(npc.getX()), decimal(npc.getY()), decimal(npc.getZ()),
+                decimal(target.getX()), decimal(target.getY()), decimal(target.getZ()));
+    }
+
     private static State state(EntityNPCInterface npc) {
         synchronized (STATES) {
             return STATES.computeIfAbsent(npc, ignored -> new State());
@@ -116,6 +138,8 @@ public final class NativeGunDiagnostics {
         private String lastGateSignature = "";
         private int lastOperationTick = Integer.MIN_VALUE;
         private String lastOutcome = "";
+        private int lastPursuitTick = Integer.MIN_VALUE;
+        private String lastPursuitSignature = "";
 
         private boolean shouldLogGate(int tick, String signature) {
             if (signature.equals(lastGateSignature) && tick - lastGateTick < SAME_STATE_INTERVAL) return false;
@@ -131,6 +155,15 @@ public final class NativeGunDiagnostics {
             if (!changed && tick - lastOperationTick < SAME_STATE_INTERVAL) return false;
             lastOperationTick = tick;
             lastOutcome = outcome;
+            return true;
+        }
+
+        private boolean shouldLogPursuit(int tick, String signature, int stalledTicks) {
+            boolean important = !signature.equals(lastPursuitSignature)
+                    || stalledTicks == 10 || stalledTicks == 20;
+            if (!important && tick - lastPursuitTick < SAME_STATE_INTERVAL) return false;
+            lastPursuitTick = tick;
+            lastPursuitSignature = signature;
             return true;
         }
     }
