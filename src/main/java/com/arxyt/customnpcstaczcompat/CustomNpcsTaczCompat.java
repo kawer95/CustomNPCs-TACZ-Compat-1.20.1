@@ -19,6 +19,7 @@ public final class CustomNpcsTaczCompat {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public CustomNpcsTaczCompat() {
+        NativeGunNetwork.init();
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, NativeGunConfig.SPEC);
         MinecraftForge.EVENT_BUS.register(new NativeGunEvents());
         if (ModList.get().isLoaded("dominionsword")) {

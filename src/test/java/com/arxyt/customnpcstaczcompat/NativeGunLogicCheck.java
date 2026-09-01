@@ -45,6 +45,12 @@ public final class NativeGunLogicCheck {
                 "an autonomous target must retain its first-shot ready tick after tail maintenance");
         check(NpcGunAimLock.shouldClearDuringTail(true, true),
                 "a blocked Dominion command must still clear its forced aim state");
+        check(NativeGunTimeoutPolicy.transientFailure("IS_SPRINTING"),
+                "sprinting must participate in stuck-state recovery");
+        check(NativeGunTimeoutPolicy.timeoutTicks("IS_SPRINTING") == 40,
+                "sprint recovery timeout changed");
+        check(NativeGunTimeoutPolicy.timeoutTicks("IS_RELOADING") == 600,
+                "legitimate long reloads need a conservative timeout");
         checkMovementSampling();
         checkOnceAnimationArbitration();
         System.out.println("Native CNPC TaCZ pure-logic checks passed");

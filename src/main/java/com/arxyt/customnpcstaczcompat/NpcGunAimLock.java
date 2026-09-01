@@ -36,7 +36,8 @@ public final class NpcGunAimLock {
                 previous == null ? Integer.MIN_VALUE : previous.readyAtTick());
         AimState state = new AimState(solution.targetId(), target, solution, readyAtTick, commanded,
                 previous == null ? Integer.MIN_VALUE : previous.lastSteeredTick(),
-                previous == null ? Integer.MIN_VALUE : previous.lastDiagnosticTick());
+                previous == null ? Integer.MIN_VALUE : previous.lastDiagnosticTick(),
+                changedTarget || previous == null ? Integer.MIN_VALUE : previous.lastSynchronizedTick());
         // LookAI is retained for CNPC command ownership, but calling rotate every gun-goal pass
         // makes the renderer snap and bypasses our first-shot barrier.  Establish it once only.
         if (changedTarget && commanded && npc.lookAi != null) npc.lookAi.rotate(target);
@@ -93,20 +94,36 @@ public final class NpcGunAimLock {
         // state must survive this tail hook: clearing it whenever Dominion is inactive made
         // every autonomous tick look like a fresh target and perpetually deferred fire to the
         // following tick. Command maintenance below remains Dominion-only.
-        if (!command.active()) return;
+        AimState state = STATES.get(npc);
+        if (!command.active()) {
+            LivingEntity target = npc.getTarget();
+            if (state == null || target == null || !target.isAlive()
+                    || !target.getUUID().equals(state.targetId())) {
+                clear(npc);
+                return;
+            }
+            lockAndSynchronize(npc, state, target);
+            return;
+        }
         if (shouldClearDuringTail(command.active(), command.nativeCombatBlocked())) {
             clear(npc);
             return;
         }
         LivingEntity target = command.attackTarget();
         if (target != null && target.isAlive()) {
-            track(npc, target);
+            AimState current = STATES.get(npc);
+            if (current == null || !target.getUUID().equals(current.targetId())) {
+                track(npc, target);
+                current = STATES.get(npc);
+            }
+            if (current != null) lockAndSynchronize(npc, current, target);
             return;
         }
         if (DominionCommandBridge.hasQueuedAttack(npc)) {
-            AimState state = STATES.get(npc);
-            if (state != null) {
-                steer(npc, state);
+            AimState retainedState = STATES.get(npc);
+            if (retainedState != null) {
+                LivingEntity retained = retainedState.target();
+                if (retained != null && retained.isAlive()) lockAndSynchronize(npc, retainedState, retained);
             }
             return;
         }
@@ -154,6 +171,30 @@ public final class NpcGunAimLock {
                 && Math.abs(Mth.wrapDegrees(solution.pitch() - npc.getXRot())) <= FIRE_PITCH_TOLERANCE;
     }
 
+    /**
+     * Runs after CNPC's own AI and body controllers. The fire gate remains strict, while this
+     * final authoritative write prevents movement/body AI from undoing the aim before entity
+     * tracking runs. A compact packet mirrors every rendered rotation field immediately.
+     */
+    private static void lockAndSynchronize(EntityNPCInterface npc, AimState state, LivingEntity target) {
+        AimSolution solution = solve(npc, target);
+        if (solution == null) return;
+        state.solution = solution;
+        float yaw = solution.yaw();
+        float pitch = solution.pitch();
+        npc.setYRot(yaw);
+        npc.yRotO = yaw;
+        npc.yBodyRot = yaw;
+        npc.yBodyRotO = yaw;
+        npc.setYHeadRot(yaw);
+        npc.yHeadRotO = yaw;
+        npc.setXRot(pitch);
+        npc.xRotO = pitch;
+        boolean snap = state.lastSynchronizedTick == Integer.MIN_VALUE;
+        state.lastSynchronizedTick = npc.tickCount;
+        NativeGunNetwork.syncAim(npc, yaw, pitch, snap);
+    }
+
     /** A compact server-side trace for verifying the first-shot barrier in a real encounter. */
     private static void trace(EntityNPCInterface npc, AimState state, boolean targetChanged,
                               boolean aligned, boolean fireReady) {
@@ -182,14 +223,16 @@ public final class NpcGunAimLock {
     private static final class AimState {
         private final UUID targetId;
         private final LivingEntity target;
-        private final AimSolution solution;
+        private AimSolution solution;
         private final int readyAtTick;
         private final boolean commanded;
         private int lastSteeredTick;
         private int lastDiagnosticTick;
+        private int lastSynchronizedTick;
 
         private AimState(UUID targetId, LivingEntity target, AimSolution solution, int readyAtTick,
-                         boolean commanded, int lastSteeredTick, int lastDiagnosticTick) {
+                         boolean commanded, int lastSteeredTick, int lastDiagnosticTick,
+                         int lastSynchronizedTick) {
             this.targetId = targetId;
             this.target = target;
             this.solution = solution;
@@ -197,6 +240,7 @@ public final class NpcGunAimLock {
             this.commanded = commanded;
             this.lastSteeredTick = lastSteeredTick;
             this.lastDiagnosticTick = lastDiagnosticTick;
+            this.lastSynchronizedTick = lastSynchronizedTick;
         }
 
         private UUID targetId() { return targetId; }
@@ -206,5 +250,6 @@ public final class NpcGunAimLock {
         private boolean commanded() { return commanded; }
         private int lastSteeredTick() { return lastSteeredTick; }
         private int lastDiagnosticTick() { return lastDiagnosticTick; }
+        private int lastSynchronizedTick() { return lastSynchronizedTick; }
     }
 }

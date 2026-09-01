@@ -6,9 +6,14 @@ import com.tacz.guns.api.entity.ShootResult;
 import com.tacz.guns.api.item.GunTabType;
 import com.tacz.guns.api.item.IGun;
 import com.tacz.guns.api.item.gun.FireMode;
+import com.tacz.guns.api.item.gun.AbstractGunItem;
 import com.tacz.guns.resource.index.CommonGunIndex;
 import com.tacz.guns.resource.pojo.data.gun.GunData;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -30,6 +35,10 @@ public final class NativeTaczGunFacade {
     }
 
     private final Map<EntityNPCInterface, String> equippedGuns =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<EntityNPCInterface, FailureState> failures =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<EntityNPCInterface, Integer> lastAmmoWarning =
             Collections.synchronizedMap(new WeakHashMap<>());
 
     public boolean isMachineGun(ItemStack stack) {
@@ -79,6 +88,14 @@ public final class NativeTaczGunFacade {
         float adjustedYaw = aim.yaw() + accuracyError(shooter, target, horizontalDistance, effectiveAccuracy);
         ShootResult result = operator.shoot(aim::pitch, () -> adjustedYaw);
         NativeGunDiagnostics.operate(shooter, target, "SHOOT_" + result.name());
+        if (transientFailure(result)) {
+            if (failureTimedOut(shooter, result)) {
+                recover(shooter, operator, result);
+                return Action.waitFor(2);
+            }
+        } else {
+            failures.remove(shooter);
+        }
         return switch (result) {
             case SUCCESS -> new Action(successDelay(gun, stack, shooter), true);
             case NOT_DRAW -> {
@@ -90,6 +107,11 @@ public final class NativeTaczGunFacade {
                 yield Action.waitFor(seconds(data.getBoltActionTime()) + 2);
             }
             case NO_AMMO -> {
+                boolean ammunitionMissing = ammunitionMissing(shooter, stack, gun, operator);
+                if (ammunitionMissing) {
+                    warnCommanderAmmoMissing(shooter);
+                    yield Action.waitFor(20);
+                }
                 operator.reload();
                 float reload = data.getReloadData() == null || data.getReloadData().getCooldown() == null
                         ? 1.0F : data.getReloadData().getCooldown().getEmptyTime();
@@ -101,6 +123,7 @@ public final class NativeTaczGunFacade {
     }
 
     public void stop(EntityNPCInterface shooter, boolean forceExitAim) {
+        failures.remove(shooter);
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
         if (operator.getSynIsAiming() && (forceExitAim || !DominionCommandBridge.hasQueuedAttack(shooter))) {
             operator.aim(false);
@@ -152,4 +175,57 @@ public final class NativeTaczGunFacade {
         if (!penaltyEnabled || !machineGun || crawling) return safeAccuracy;
         return Mth.clamp(Math.round(safeAccuracy * 0.5F), 0, 100);
     }
+
+    private boolean failureTimedOut(EntityNPCInterface shooter, ShootResult result) {
+        FailureState previous = failures.get(shooter);
+        if (previous == null || previous.result() != result) {
+            failures.put(shooter, new FailureState(result, shooter.tickCount));
+            return false;
+        }
+        return shooter.tickCount - previous.sinceTick() >= timeoutTicks(result);
+    }
+
+    private void recover(EntityNPCInterface shooter, IGunOperator operator, ShootResult result) {
+        failures.remove(shooter);
+        shooter.setSprinting(false);
+        try { operator.cancelReload(); } catch (RuntimeException ignored) { }
+        operator.initialData();
+        operator.draw(shooter::getMainHandItem);
+        operator.aim(true);
+        NativeGunDiagnostics.operate(shooter, shooter.getTarget(), "TIMEOUT_RECOVERY_" + result.name());
+    }
+
+    static boolean transientFailure(ShootResult result) {
+        return result != null && NativeGunTimeoutPolicy.transientFailure(result.name());
+    }
+
+    static int timeoutTicks(ShootResult result) {
+        return result == null ? Integer.MAX_VALUE : NativeGunTimeoutPolicy.timeoutTicks(result.name());
+    }
+
+    private static boolean ammunitionMissing(EntityNPCInterface shooter, ItemStack stack,
+                                               IGun gun, IGunOperator operator) {
+        if (!operator.needCheckAmmo()) return false;
+        if (gun.useInventoryAmmo(stack)) return !gun.hasInventoryAmmo(shooter, stack, true);
+        return stack.getItem() instanceof AbstractGunItem abstractGun && !abstractGun.canReload(shooter, stack);
+    }
+
+    private void warnCommanderAmmoMissing(EntityNPCInterface shooter) {
+        DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(shooter);
+        if (!command.active() || !(shooter.level() instanceof ServerLevel level)) return;
+        int previous = lastAmmoWarning.getOrDefault(shooter, Integer.MIN_VALUE);
+        if (shooter.tickCount - previous < 20) return;
+        lastAmmoWarning.put(shooter, shooter.tickCount);
+        var data = shooter.getPersistentData();
+        String controllerKey = "dominionsword_controller_player";
+        if (!data.hasUUID(controllerKey)) return;
+        ServerPlayer commander = level.getServer().getPlayerList().getPlayer(data.getUUID(controllerKey));
+        if (commander != null) {
+            commander.displayClientMessage(Component.translatable(
+                    "message.customnpcs_tacz_compat.ammo_insufficient", shooter.getDisplayName())
+                    .withStyle(ChatFormatting.RED), true);
+        }
+    }
+
+    private record FailureState(ShootResult result, int sinceTick) { }
 }

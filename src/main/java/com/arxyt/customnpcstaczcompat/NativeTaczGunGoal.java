@@ -59,6 +59,7 @@ public final class NativeTaczGunGoal extends Goal {
     @Override
     public void tick() {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
+        if (command.active()) npc.setSprinting(false);
         LivingEntity target = target(command);
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeGunDiagnostics.gate(npc, "REGULAR", "DOMINION_RELOAD_ACTIVE", command, target,
@@ -127,7 +128,7 @@ public final class NativeTaczGunGoal extends Goal {
                 case PURSUE -> {
                     strafeTime = -1;
                     double speed = DominionCommandBridge.commandMovementSpeed(npc, 1.0D);
-                    npc.setSprinting(speed > 1.0D && !command.prone());
+                    npc.setSprinting(false);
                     npc.getNavigation().moveTo(target, speed);
                     npc.getMoveControl().strafe(0.0F, 0.0F);
                 }

@@ -5,6 +5,7 @@ import com.arxyt.customnpcstaczcompat.NpcGunAimLock;
 import com.arxyt.customnpcstaczcompat.ProneTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.SentryTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.WatchTaczGunGoal;
+import com.arxyt.customnpcstaczcompat.DominionCommandBridge;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.level.Level;
@@ -32,6 +33,10 @@ public abstract class EntityNPCInterfaceMixin extends PathfinderMob {
     /** Runs after CNPC's own tick so queued-command aim does not snap back to idle. */
     @Inject(method = "m_8119_", at = @At("TAIL"), remap = false, require = 0)
     private void customnpcsTaczCompat$maintainCommandGunAim(CallbackInfo ci) {
-        if (!level().isClientSide) NpcGunAimLock.maintain((EntityNPCInterface) (Object) this);
+        if (!level().isClientSide) {
+            EntityNPCInterface npc = (EntityNPCInterface) (Object) this;
+            if (DominionCommandBridge.snapshot(npc).active()) npc.setSprinting(false);
+            NpcGunAimLock.maintain(npc);
+        }
     }
 }
