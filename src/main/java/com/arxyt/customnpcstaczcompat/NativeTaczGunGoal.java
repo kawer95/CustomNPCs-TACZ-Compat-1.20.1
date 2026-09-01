@@ -128,7 +128,10 @@ public final class NativeTaczGunGoal extends Goal {
                 case PURSUE -> {
                     strafeTime = -1;
                     double speed = DominionCommandBridge.commandMovementSpeed(npc, 1.0D);
-                    npc.setSprinting(false);
+                    // Sprint remains the ecosystem-wide run-animation signal. The gun facade
+                    // clears it, together with TaCZ's cached sprint transition, only when this
+                    // unit actually reaches a firing boundary.
+                    npc.setSprinting(speed > 1.0D && !command.prone());
                     npc.getNavigation().moveTo(target, speed);
                     npc.getMoveControl().strafe(0.0F, 0.0F);
                 }

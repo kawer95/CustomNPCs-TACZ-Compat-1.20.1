@@ -63,6 +63,7 @@ public final class NativeTaczGunFacade {
         }
         GunData data = index.get().getGunData();
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
+        prepareImmediateFire(shooter, operator);
         String gunKey = String.valueOf(gun.getGunId(stack));
         if (!gunKey.equals(equippedGuns.put(shooter, gunKey))) {
             operator.draw(shooter::getMainHandItem);
@@ -87,6 +88,12 @@ public final class NativeTaczGunFacade {
                 sniperRifle, operator.getDataHolder().isCrawling);
         float adjustedYaw = aim.yaw() + accuracyError(shooter, target, horizontalDistance, effectiveAccuracy);
         ShootResult result = operator.shoot(aim::pitch, () -> adjustedYaw);
+        if (result == ShootResult.IS_SPRINTING) {
+            // A later hook may have rebuilt the transition after the first preparation. Do not
+            // turn that compatibility race into a one-or-two-second first-shot delay.
+            prepareImmediateFire(shooter, operator);
+            result = operator.shoot(aim::pitch, () -> adjustedYaw);
+        }
         NativeGunDiagnostics.operate(shooter, target, "SHOOT_" + result.name());
         if (transientFailure(result)) {
             if (failureTimedOut(shooter, result)) {
@@ -193,6 +200,13 @@ public final class NativeTaczGunFacade {
         operator.draw(shooter::getMainHandItem);
         operator.aim(true);
         NativeGunDiagnostics.operate(shooter, shooter.getTarget(), "TIMEOUT_RECOVERY_" + result.name());
+    }
+
+    /** Leaves visual locomotion only at the real weapon boundary and skips TaCZ's sprint unwind. */
+    private static void prepareImmediateFire(EntityNPCInterface shooter, IGunOperator operator) {
+        shooter.setSprinting(false);
+        operator.getDataHolder().sprintTimeS = 0.0F;
+        operator.getDataHolder().sprintTimestamp = System.currentTimeMillis();
     }
 
     static boolean transientFailure(ShootResult result) {
