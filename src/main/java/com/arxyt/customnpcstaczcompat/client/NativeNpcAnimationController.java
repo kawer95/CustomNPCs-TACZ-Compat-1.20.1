@@ -273,8 +273,10 @@ public final class NativeNpcAnimationController {
             } else {
                 state.onceSpeed.speed = 1.0F;
             }
+            var playback = action == OnceAnimationArbitrator.Action.RELOAD
+                    ? holdLastFrame(animation.get()) : animation.get();
             state.once.replaceAnimationWithFade(AbstractFadeModifier.standardFadeIn(3, Ease.INOUTSINE),
-                    new KeyframeAnimationPlayer(animation.get()));
+                    new KeyframeAnimationPlayer(playback));
             state.onceAction = action;
         }
         return new OncePlayback(id, true, previous, previousActive, decision);
@@ -318,6 +320,24 @@ public final class NativeNpcAnimationController {
             }).orElse(1.0F);
         } catch (RuntimeException | LinkageError ignored) {
             return 1.0F;
+        }
+    }
+
+    /**
+     * A reload clip is visual state, not the authority that ends TaCZ reload.  Looping only its
+     * last keyframe keeps a scripted or packet-delayed reload posed without restarting the
+     * magazine manipulation from frame zero.  The synchronized ReloadState clears the layer.
+     */
+    private static dev.kosmx.playerAnim.core.data.KeyframeAnimation holdLastFrame(
+            dev.kosmx.playerAnim.core.data.KeyframeAnimation animation) {
+        try {
+            var builder = animation.mutableCopy();
+            builder.isLooped = true;
+            builder.returnTick = animation.endTick;
+            builder.stopTick = Integer.MAX_VALUE;
+            return builder.build();
+        } catch (RuntimeException error) {
+            return animation;
         }
     }
 
@@ -600,11 +620,11 @@ public final class NativeNpcAnimationController {
                 return;
             }
             // Packet loss/order must not leave an NPC frozen in its hold pose for a successful
-            // server reload. A mismatched third-party clip is replayed only if it still expires
-            // before TaCZ's authoritative state; it must never leave a multi-second idle gap.
+            // server reload. Reload clips hold their last keyframe until this authoritative
+            // state ends, so this path is an edge fallback rather than a periodic replay.
             safePlayOnce(npc, stack, isProne(npc) ? "lie_reload" : "reload_upper",
                     OnceAnimationArbitrator.Action.RELOAD,
-                    reloadEventSeen ? "SYNC_RELOAD_ANIMATION_EXPIRED" : "SYNC_RELOAD_STATE_EDGE");
+                    reloadEventSeen ? "SYNC_RELOAD_ANIMATION_RECOVERY" : "SYNC_RELOAD_STATE_EDGE");
         }
 
         private void setProneTarget(boolean prone) {
