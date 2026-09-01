@@ -20,6 +20,7 @@ import dev.kosmx.playerAnim.api.layered.KeyframeAnimationPlayer;
 import dev.kosmx.playerAnim.api.layered.ModifierLayer;
 import dev.kosmx.playerAnim.api.layered.modifier.AbstractFadeModifier;
 import dev.kosmx.playerAnim.api.layered.modifier.AdjustmentModifier;
+import dev.kosmx.playerAnim.api.layered.modifier.SpeedModifier;
 import dev.kosmx.playerAnim.core.impl.AnimationProcessor;
 import dev.kosmx.playerAnim.core.util.Ease;
 import dev.kosmx.playerAnim.core.util.Vec3f;
@@ -264,6 +265,14 @@ public final class NativeNpcAnimationController {
         OnceAnimationArbitrator.Decision decision = OnceAnimationArbitrator.decide(previous, previousActive, action);
         if (decision == OnceAnimationArbitrator.Decision.START
                 || decision == OnceAnimationArbitrator.Decision.PREEMPT_WITH_RELOAD) {
+            if (action == OnceAnimationArbitrator.Action.RELOAD) {
+                if (state.reloadPlaybackSpeed <= 0.0F) {
+                    state.reloadPlaybackSpeed = reloadPlaybackSpeed(stack, animation.get());
+                }
+                state.onceSpeed.speed = state.reloadPlaybackSpeed;
+            } else {
+                state.onceSpeed.speed = 1.0F;
+            }
             state.once.replaceAnimationWithFade(AbstractFadeModifier.standardFadeIn(3, Ease.INOUTSINE),
                     new KeyframeAnimationPlayer(animation.get()));
             state.onceAction = action;
@@ -290,6 +299,25 @@ public final class NativeNpcAnimationController {
             return String.valueOf(IGunOperator.fromLivingEntity(npc).getSynReloadState());
         } catch (Throwable ignored) {
             return "UNAVAILABLE";
+        }
+    }
+
+    /** Match a pack's generic PlayerAnimator clip to this gun's authoritative TaCZ reload time. */
+    private static float reloadPlaybackSpeed(ItemStack stack,
+                                             dev.kosmx.playerAnim.core.data.KeyframeAnimation animation) {
+        try {
+            IGun gun = IGun.getIGunOrNull(stack);
+            if (gun == null || animation == null || animation.getLength() <= 0) return 1.0F;
+            return TimelessAPI.getCommonGunIndex(gun.getGunId(stack)).map(index -> {
+                var reload = index.getGunData().getReloadData();
+                if (reload == null || reload.getCooldown() == null) return 1.0F;
+                boolean empty = gun.getCurrentAmmoCount(stack) <= 0;
+                float seconds = empty ? reload.getCooldown().getEmptyTime() : reload.getCooldown().getTacticalTime();
+                if (!(seconds > 0.0F)) return 1.0F;
+                return Mth.clamp(animation.getLength() / (seconds * 20.0F), 0.05F, 4.0F);
+            }).orElse(1.0F);
+        } catch (RuntimeException | LinkageError ignored) {
+            return 1.0F;
         }
     }
 
@@ -498,7 +526,8 @@ public final class NativeNpcAnimationController {
         private final AnimationStack stack = new AnimationStack();
         private final ModifierLayer<IAnimation> lower = new ModifierLayer<>();
         private final ModifierLayer<IAnimation> loopUpper = new ModifierLayer<>();
-        private final ModifierLayer<IAnimation> once = new ModifierLayer<>();
+        private final SpeedModifier onceSpeed = new SpeedModifier(1.0F);
+        private final ModifierLayer<IAnimation> once = new ModifierLayer<>(null, onceSpeed);
         private final ModifierLayer<IAnimation> rotation;
         private final dev.kosmx.playerAnim.impl.animation.AnimationApplier applier;
         private final Map<Slot, String> names = new HashMap<>();
@@ -509,6 +538,7 @@ public final class NativeNpcAnimationController {
         private OnceAnimationArbitrator.Action onceAction = OnceAnimationArbitrator.Action.NONE;
         private boolean synchronizedReloadActive;
         private boolean reloadEventSeen;
+        private float reloadPlaybackSpeed;
         private boolean proneTarget;
         private float proneRootProgress;
         private float previousProneRootProgress;
@@ -558,16 +588,23 @@ public final class NativeNpcAnimationController {
             if (!active) {
                 synchronizedReloadActive = false;
                 reloadEventSeen = false;
+                reloadPlaybackSpeed = 0.0F;
+                onceSpeed.speed = 1.0F;
+                if (onceAction == OnceAnimationArbitrator.Action.RELOAD) clearOnce();
                 return;
             }
-            if (synchronizedReloadActive) return;
-            synchronizedReloadActive = true;
-            if (reloadEventSeen) return;
+            if (!synchronizedReloadActive) {
+                synchronizedReloadActive = true;
+                if (reloadEventSeen) return;
+            } else if (onceAction == OnceAnimationArbitrator.Action.RELOAD && onceActive()) {
+                return;
+            }
             // Packet loss/order must not leave an NPC frozen in its hold pose for a successful
-            // server reload. The regular one-shot policy makes this harmless when the event
-            // arrives later: it observes an already-running reload and does not restart it.
+            // server reload. A mismatched third-party clip is replayed only if it still expires
+            // before TaCZ's authoritative state; it must never leave a multi-second idle gap.
             safePlayOnce(npc, stack, isProne(npc) ? "lie_reload" : "reload_upper",
-                    OnceAnimationArbitrator.Action.RELOAD, "SYNC_RELOAD_STATE_EDGE");
+                    OnceAnimationArbitrator.Action.RELOAD,
+                    reloadEventSeen ? "SYNC_RELOAD_ANIMATION_EXPIRED" : "SYNC_RELOAD_STATE_EDGE");
         }
 
         private void setProneTarget(boolean prone) {
