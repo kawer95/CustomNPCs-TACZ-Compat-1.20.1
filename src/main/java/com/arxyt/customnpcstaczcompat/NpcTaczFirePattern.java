@@ -35,14 +35,19 @@ final class NpcTaczFirePattern {
         }
 
         state.remainingShots--;
-        int delay;
-        if (state.remainingShots > 0) {
-            delay = random(npc, settings.shotIntervalMin(), settings.shotIntervalMax());
-        } else {
+        // The shot interval is the base delay between every pair of trigger pulls.  The old
+        // implementation skipped it for the final (and therefore for a one-shot) group, so a
+        // default group size of one silently used only GroupInterval.  That made a visible
+        // five-tick "single interval" have no effect at all.
+        int delay = random(npc, settings.shotIntervalMin(), settings.shotIntervalMax());
+        if (state.remainingShots <= 0) {
             state.remainingGroups--;
-            delay = random(npc, settings.groupIntervalMin(), settings.groupIntervalMax());
             if (state.remainingGroups > 0) {
                 state.remainingShots = random(npc, settings.burstShotsMin(), settings.burstShotsMax());
+                // Group spacing is an additional pause between distinct groups, never a
+                // replacement for the configured interval between shots.
+                delay = delayAfterShot(delay,
+                        random(npc, settings.groupIntervalMin(), settings.groupIntervalMax()), true);
             }
         }
         state.nextShotTick = npc.tickCount + Math.max(1, delay);
@@ -53,6 +58,11 @@ final class NpcTaczFirePattern {
 
     static void reset(EntityNPCInterface npc) {
         if (npc != null) STATES.remove(npc);
+    }
+
+    /** Pure cadence rule retained for regression checks of one-shot groups. */
+    static int delayAfterShot(int shotInterval, int groupInterval, boolean hasAnotherGroup) {
+        return Math.max(1, shotInterval) + (hasAnotherGroup ? Math.max(1, groupInterval) : 0);
     }
 
     private static int random(EntityNPCInterface npc, int min, int max) {

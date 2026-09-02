@@ -82,6 +82,10 @@ public final class NativeGunLogicCheck {
                 "combat settings NBT schema changed unexpectedly");
         check(sanitized.toTag().getBoolean("Configured"),
                 "a saved tactical policy must be explicitly marked configured");
+        check(NpcTaczFirePattern.delayAfterShot(5, 1, false) == 5,
+                "a one-shot group must still respect the configured shot interval");
+        check(NpcTaczFirePattern.delayAfterShot(5, 20, true) == 25,
+                "group spacing must add to, not replace, the shot interval");
     }
 
     private static void checkMovementSampling() {
