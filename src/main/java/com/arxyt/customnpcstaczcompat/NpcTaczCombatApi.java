@@ -23,12 +23,14 @@ public final class NpcTaczCombatApi {
 
     /** Whether the configured burst state currently permits another TaCZ trigger pull. */
     public static boolean allowsShot(EntityNPCInterface npc) {
-        return NpcTaczFirePattern.allowsShot(npc);
+        return !configured(npc) || NpcTaczFirePattern.allowsShot(npc);
     }
 
     /** Records a successful TaCZ trigger pull and returns the configured minimum wait in ticks. */
     public static int recordSuccessfulShot(EntityNPCInterface npc) {
-        return NpcTaczFirePattern.recordSuccessfulShot(npc);
+        // With no explicit page policy, request the weapon every AI tick and let TaCZ's own
+        // fire mode/cooldown implementation provide its normal continuous-fire cadence.
+        return !configured(npc) ? 1 : NpcTaczFirePattern.recordSuccessfulShot(npc);
     }
 
     public static void resetPattern(EntityNPCInterface npc) {

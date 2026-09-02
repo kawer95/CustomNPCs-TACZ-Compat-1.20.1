@@ -46,6 +46,8 @@ final class NpcTaczFirePattern {
             }
         }
         state.nextShotTick = npc.tickCount + Math.max(1, delay);
+        NativeGunDiagnostics.cadence(npc, settings, delay, state.nextShotTick,
+                state.remainingShots, state.remainingGroups);
         return Math.max(1, delay);
     }
 

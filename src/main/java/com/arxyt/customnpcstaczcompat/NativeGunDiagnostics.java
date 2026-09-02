@@ -54,11 +54,30 @@ public final class NativeGunDiagnostics {
         State state = state(npc);
         if (!state.shouldLogOperation(npc.tickCount, outcome)) return;
         GunStatus gun = gunStatus(npc);
+        NpcTaczCombatSettings combat = NpcTaczCombatSettings.resolve(npc);
         CustomNpcsTaczCompat.LOGGER.info(
-                "[CNPC-TACZ-OPERATE] npcId={} tick={} target={} outcome={} gun={id={},ammo={},aiming={},aimProgress={},reload={},drawCooldown={},shootCooldown={},bolting={},sprinting={}}",
+                "[CNPC-TACZ-OPERATE] npcId={} tick={} target={} outcome={} tacticalConfigured={} tactical={range={},accuracy={},shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}} gun={id={},ammo={},aiming={},aimProgress={},reload={},drawCooldown={},shootCooldown={},bolting={},sprinting={}}",
                 npc.getId(), npc.tickCount, target == null ? "none" : target.getUUID(), outcome,
+                NpcTaczCombatSettings.isConfigured(npc), combat.range(), combat.accuracy(),
+                combat.shotIntervalMin(), combat.shotIntervalMax(), combat.burstShotsMin(),
+                combat.burstShotsMax(), combat.burstGroupsMin(), combat.burstGroupsMax(),
+                combat.groupIntervalMin(), combat.groupIntervalMax(),
                 gun.id(), gun.ammo(), gun.aiming(), decimal(gun.aimProgress()), gun.reloadState(),
                 gun.drawCooldown(), gun.shootCooldown(), gun.bolting(), gun.sprinting());
+    }
+
+    /** Proves the exact custom cadence consumed at the successful TaCZ trigger boundary. */
+    public static void cadence(EntityNPCInterface npc, NpcTaczCombatSettings settings, int delay,
+                               int nextShotTick, int remainingShots, int remainingGroups) {
+        if (npc == null || settings == null) return;
+        State state = state(npc);
+        if (!state.shouldLogCadence(npc.tickCount)) return;
+        CustomNpcsTaczCompat.LOGGER.info(
+                "[CNPC-TACZ-CADENCE] npcId={} tick={} applied=true delay={} nextShotTick={} remainingShots={} remainingGroups={} settings={shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}}}",
+                npc.getId(), npc.tickCount, delay, nextShotTick, remainingShots, remainingGroups,
+                settings.shotIntervalMin(), settings.shotIntervalMax(), settings.burstShotsMin(),
+                settings.burstShotsMax(), settings.burstGroupsMin(), settings.burstGroupsMax(),
+                settings.groupIntervalMin(), settings.groupIntervalMax());
     }
 
     /** Confirms that a new Ctrl/area queue discarded only stale first-target reaction state. */
@@ -140,6 +159,7 @@ public final class NativeGunDiagnostics {
         private String lastOutcome = "";
         private int lastPursuitTick = Integer.MIN_VALUE;
         private String lastPursuitSignature = "";
+        private int lastCadenceTick = Integer.MIN_VALUE;
 
         private boolean shouldLogGate(int tick, String signature) {
             if (signature.equals(lastGateSignature) && tick - lastGateTick < SAME_STATE_INTERVAL) return false;
@@ -164,6 +184,12 @@ public final class NativeGunDiagnostics {
             if (!important && tick - lastPursuitTick < SAME_STATE_INTERVAL) return false;
             lastPursuitTick = tick;
             lastPursuitSignature = signature;
+            return true;
+        }
+
+        private boolean shouldLogCadence(int tick) {
+            if (tick - lastCadenceTick < SAME_STATE_INTERVAL) return false;
+            lastCadenceTick = tick;
             return true;
         }
     }

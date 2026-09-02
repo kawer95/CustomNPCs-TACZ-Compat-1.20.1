@@ -4,7 +4,7 @@
   "message.customnpcs_tacz_compat.combat_denied": "未保存 TaCZ 战术设置：请保持正在编辑该 NPC，并手持 NPC 权杖",
   "gui.customnpcs_tacz_compat.combat.tab": "TaCZ 战术",
   "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ 战术射击",
-  "gui.customnpcs_tacz_compat.combat.description": "仅影响 TaCZ 枪械；范围、命中率和连射节奏独立保存。",
+  "gui.customnpcs_tacz_compat.combat.description": "仅影响 TaCZ 枪械；未按“完成”时保持 TaCZ 原生射速，保存后才启用以下战术节奏。",
   "gui.customnpcs_tacz_compat.combat.range": "射击距离",
   "gui.customnpcs_tacz_compat.combat.accuracy": "命中率",
   "gui.customnpcs_tacz_compat.combat.shot_interval": "单发间隔 (tick)",

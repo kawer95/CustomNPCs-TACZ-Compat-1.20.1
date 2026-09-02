@@ -14,9 +14,16 @@ public record NpcTaczCombatSettings(int range, int accuracy,
                                     int burstShotsMin, int burstShotsMax,
                                     int burstGroupsMin, int burstGroupsMax,
                                     int groupIntervalMin, int groupIntervalMax) {
-    public static final int SCHEMA = 1;
+    /**
+     * Schema two separates an editor's reference values from an explicitly enabled firing
+     * policy. Schema one was created automatically on first fire, which accidentally made a
+     * normal TaCZ automatic weapon inherit CNPC's five-tick projectile rate.
+     */
+    public static final int SCHEMA = 2;
     public static final String ROOT_KEY = "customnpcs_tacz_compat_combat";
     private static final String SCHEMA_KEY = "Schema";
+    private static final String CONFIGURED_KEY = "Configured";
+    private static final int LEGACY_SCHEMA = 1;
 
     /** Mirrors a newly-created CNPC's native ranged defaults. */
     public static final NpcTaczCombatSettings DEFAULT = new NpcTaczCombatSettings(
@@ -35,30 +42,38 @@ public record NpcTaczCombatSettings(int range, int accuracy,
         groupIntervalMax = Math.max(groupIntervalMin, clamp(groupIntervalMax, 1, 7_200));
     }
 
-    public static boolean isConfigured(EntityNPCInterface npc) {
-        return npc != null && npc.getPersistentData().contains(ROOT_KEY, Tag.TAG_COMPOUND)
-                && npc.getPersistentData().getCompound(ROOT_KEY).getInt(SCHEMA_KEY) == SCHEMA;
-    }
-
     /**
-     * A first access snapshots legacy CNPC ranged fields into this add-on's own data. From that
-     * point onward TaCZ never reads the native ranged values again. This is both a lossless
-     * upgrade for existing NPCs and the required separation from CNPC projectile settings.
+     * Returns values for the editor and for range/accuracy fallback. Reading them is deliberately
+     * side-effect free: merely equipping a TaCZ weapon must never enable a custom burst policy.
      */
     public static NpcTaczCombatSettings resolve(EntityNPCInterface npc) {
         if (npc == null) return DEFAULT;
         CompoundTag root = npc.getPersistentData();
-        if (!root.contains(ROOT_KEY, Tag.TAG_COMPOUND)) {
-            NpcTaczCombatSettings migrated = fromNativeRanged(npc);
-            root.put(ROOT_KEY, migrated.toTag());
-            return migrated;
-        }
+        if (!root.contains(ROOT_KEY, Tag.TAG_COMPOUND)) return fromNativeRanged(npc);
         CompoundTag tag = root.getCompound(ROOT_KEY);
-        if (tag.getInt(SCHEMA_KEY) != SCHEMA) {
-            NpcTaczCombatSettings migrated = fromNativeRanged(npc);
-            root.put(ROOT_KEY, migrated.toTag());
-            return migrated;
-        }
+        int schema = tag.getInt(SCHEMA_KEY);
+        if (schema != SCHEMA && schema != LEGACY_SCHEMA) return fromNativeRanged(npc);
+        return fromTag(tag);
+    }
+
+    /**
+     * Only an explicit click on the TaCZ editor's Done button may change firing cadence.
+     *
+     * <p>Schema-one data did not record that distinction. It is considered enabled only when it
+     * differs from the exact CNPC values it was initially copied from. This restores untouched
+     * NPCs to TaCZ's native cadence while retaining real legacy edits.</p>
+     */
+    public static boolean isConfigured(EntityNPCInterface npc) {
+        if (npc == null) return false;
+        CompoundTag root = npc.getPersistentData();
+        if (!root.contains(ROOT_KEY, Tag.TAG_COMPOUND)) return false;
+        CompoundTag tag = root.getCompound(ROOT_KEY);
+        int schema = tag.getInt(SCHEMA_KEY);
+        if (schema == SCHEMA) return tag.getBoolean(CONFIGURED_KEY);
+        return schema == LEGACY_SCHEMA && !fromTag(tag).equals(fromNativeRanged(npc));
+    }
+
+    private static NpcTaczCombatSettings fromTag(CompoundTag tag) {
         return new NpcTaczCombatSettings(
                 tag.getInt("Range"), tag.getInt("Accuracy"),
                 tag.getInt("ShotIntervalMin"), tag.getInt("ShotIntervalMax"),
@@ -76,6 +91,7 @@ public record NpcTaczCombatSettings(int range, int accuracy,
     public CompoundTag toTag() {
         CompoundTag tag = new CompoundTag();
         tag.putInt(SCHEMA_KEY, SCHEMA);
+        tag.putBoolean(CONFIGURED_KEY, true);
         tag.putInt("Range", range);
         tag.putInt("Accuracy", accuracy);
         tag.putInt("ShotIntervalMin", shotIntervalMin);

@@ -4,7 +4,7 @@
   "message.customnpcs_tacz_compat.combat_denied": "TaCZ combat settings were not saved: keep editing this NPC and hold the NPC Wand.",
   "gui.customnpcs_tacz_compat.combat.tab": "TaCZ Tactics",
   "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ Tactical Fire",
-  "gui.customnpcs_tacz_compat.combat.description": "TaCZ guns only. Range, accuracy and firing cadence are saved separately.",
+  "gui.customnpcs_tacz_compat.combat.description": "TaCZ guns only. TaCZ's native cadence remains active until Done saves this tactical policy.",
   "gui.customnpcs_tacz_compat.combat.range": "Firing range",
   "gui.customnpcs_tacz_compat.combat.accuracy": "Accuracy",
   "gui.customnpcs_tacz_compat.combat.shot_interval": "Shot interval (ticks)",

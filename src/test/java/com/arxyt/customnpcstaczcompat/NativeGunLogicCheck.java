@@ -80,6 +80,8 @@ public final class NativeGunLogicCheck {
                 "group interval maximum must never fall below its minimum");
         check(sanitized.toTag().getInt("Schema") == NpcTaczCombatSettings.SCHEMA,
                 "combat settings NBT schema changed unexpectedly");
+        check(sanitized.toTag().getBoolean("Configured"),
+                "a saved tactical policy must be explicitly marked configured");
     }
 
     private static void checkMovementSampling() {
