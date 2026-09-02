@@ -56,9 +56,9 @@ public final class NativeGunDiagnostics {
         GunStatus gun = gunStatus(npc);
         NpcTaczCombatSettings combat = NpcTaczCombatSettings.resolve(npc);
         CustomNpcsTaczCompat.LOGGER.info(
-                "[CNPC-TACZ-OPERATE] npcId={} tick={} target={} outcome={} tacticalConfigured={} tactical={range={},accuracy={},shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}} gun={id={},ammo={},aiming={},aimProgress={},reload={},drawCooldown={},shootCooldown={},bolting={},sprinting={}}",
+                "[CNPC-TACZ-OPERATE] npcId={} tick={} target={} outcome={} tacticalConfigured={} tactical={mode={},range={},accuracy={},shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}} gun={id={},ammo={},aiming={},aimProgress={},reload={},drawCooldown={},shootCooldown={},bolting={},sprinting={}}",
                 npc.getId(), npc.tickCount, target == null ? "none" : target.getUUID(), outcome,
-                NpcTaczCombatSettings.isConfigured(npc), combat.range(), combat.accuracy(),
+                NpcTaczCombatSettings.isConfigured(npc), combat.cadenceMode(), combat.range(), combat.accuracy(),
                 combat.shotIntervalMin(), combat.shotIntervalMax(), combat.burstShotsMin(),
                 combat.burstShotsMax(), combat.burstGroupsMin(), combat.burstGroupsMax(),
                 combat.groupIntervalMin(), combat.groupIntervalMax(),
@@ -73,8 +73,8 @@ public final class NativeGunDiagnostics {
         State state = state(npc);
         if (!state.shouldLogCadence(npc.tickCount)) return;
         CustomNpcsTaczCompat.LOGGER.info(
-                "[CNPC-TACZ-CADENCE] npcId={} tick={} applied=true delay={} nextShotTick={} remainingShots={} remainingGroups={} settings={shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}}}",
-                npc.getId(), npc.tickCount, delay, nextShotTick, remainingShots, remainingGroups,
+                "[CNPC-TACZ-CADENCE] npcId={} tick={} mode={} applied=true delay={} nextShotTick={} remainingShots={} remainingGroups={} settings={shotInterval={}-{},shots={}-{},groups={}-{},groupInterval={}-{}}}",
+                npc.getId(), npc.tickCount, settings.cadenceMode(), delay, nextShotTick, remainingShots, remainingGroups,
                 settings.shotIntervalMin(), settings.shotIntervalMax(), settings.burstShotsMin(),
                 settings.burstShotsMax(), settings.burstGroupsMin(), settings.burstGroupsMax(),
                 settings.groupIntervalMin(), settings.groupIntervalMax());

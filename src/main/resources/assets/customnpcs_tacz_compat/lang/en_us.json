@@ -10,5 +10,8 @@
   "gui.customnpcs_tacz_compat.combat.shot_interval": "Shot interval (ticks)",
   "gui.customnpcs_tacz_compat.combat.burst_shots": "Shots per group",
   "gui.customnpcs_tacz_compat.combat.burst_groups": "Groups per burst",
-  "gui.customnpcs_tacz_compat.combat.group_interval": "Group interval (ticks)"
+  "gui.customnpcs_tacz_compat.combat.group_interval": "Group interval (ticks)",
+  "gui.customnpcs_tacz_compat.combat.mode.native_auto": "Native TaCZ automatic fire",
+  "gui.customnpcs_tacz_compat.combat.mode.continuous_point": "Continuous point-fire mode",
+  "gui.customnpcs_tacz_compat.combat.mode.intermittent_point": "Intermittent point-fire mode"
 }

@@ -83,14 +83,17 @@ public final class TaczCombatSettingsScreen extends Screen {
     }
 
     private void save() {
-        NpcTaczCombatSettings candidate = new NpcTaczCombatSettings(
+        NativeGunNetwork.saveCombatSettings(entityId, currentCandidate());
+        back();
+    }
+
+    private NpcTaczCombatSettings currentCandidate() {
+        return new NpcTaczCombatSettings(
                 integer("range", settings.range()), integer("accuracy", settings.accuracy()),
                 integer("shotIntervalMin", settings.shotIntervalMin()), integer("shotIntervalMax", settings.shotIntervalMax()),
                 integer("burstShotsMin", settings.burstShotsMin()), integer("burstShotsMax", settings.burstShotsMax()),
                 integer("burstGroupsMin", settings.burstGroupsMin()), integer("burstGroupsMax", settings.burstGroupsMax()),
                 integer("groupIntervalMin", settings.groupIntervalMin()), integer("groupIntervalMax", settings.groupIntervalMax()));
-        NativeGunNetwork.saveCombatSettings(entityId, candidate);
-        back();
     }
 
     private int integer(String key, int fallback) {
@@ -121,6 +124,8 @@ public final class TaczCombatSettingsScreen extends Screen {
         rangeLabel(graphics, "gui.customnpcs_tacz_compat.combat.burst_shots", panelLeft + 200, firstY + 20);
         rangeLabel(graphics, "gui.customnpcs_tacz_compat.combat.burst_groups", panelLeft, firstY + 50);
         rangeLabel(graphics, "gui.customnpcs_tacz_compat.combat.group_interval", panelLeft + 200, firstY + 50);
+        graphics.drawCenteredString(font, Component.translatable(modeTranslationKey(currentCandidate().cadenceMode())),
+                width / 2, firstY + 88, 0x8FE3A0);
     }
 
     private void label(GuiGraphics graphics, String key, int x, int y) {
@@ -131,5 +136,13 @@ public final class TaczCombatSettingsScreen extends Screen {
         label(graphics, key, x, y);
         graphics.drawString(font, "min", x + 84, y, 0x909090);
         graphics.drawString(font, "max", x + 140, y, 0x909090);
+    }
+
+    private static String modeTranslationKey(NpcTaczCombatSettings.CadenceMode mode) {
+        return switch (mode) {
+            case NATIVE_AUTO -> "gui.customnpcs_tacz_compat.combat.mode.native_auto";
+            case CONTINUOUS_POINT -> "gui.customnpcs_tacz_compat.combat.mode.continuous_point";
+            case INTERMITTENT_POINT -> "gui.customnpcs_tacz_compat.combat.mode.intermittent_point";
+        };
     }
 }

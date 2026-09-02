@@ -16,6 +16,7 @@ final class NpcTaczFirePattern {
     static boolean allowsShot(EntityNPCInterface npc) {
         if (npc == null) return false;
         NpcTaczCombatSettings settings = NpcTaczCombatSettings.resolve(npc);
+        if (settings.cadenceMode() == NpcTaczCombatSettings.CadenceMode.NATIVE_AUTO) return true;
         State state = STATES.get(npc);
         if (state == null || !state.settings.equals(settings)) return true;
         return npc.tickCount >= state.nextShotTick;
@@ -29,13 +30,28 @@ final class NpcTaczFirePattern {
             state = new State(settings);
             STATES.put(npc, state);
         }
+        if (settings.cadenceMode() == NpcTaczCombatSettings.CadenceMode.NATIVE_AUTO) {
+            STATES.remove(npc);
+            return 1;
+        }
+
+        if (settings.cadenceMode() == NpcTaczCombatSettings.CadenceMode.CONTINUOUS_POINT) {
+            int delay = random(npc, settings.shotIntervalMin(), settings.shotIntervalMax());
+            state.remainingShots = 0;
+            state.remainingGroups = 0;
+            state.nextShotTick = npc.tickCount + Math.max(1, delay);
+            NativeGunDiagnostics.cadence(npc, settings, delay, state.nextShotTick,
+                    state.remainingShots, state.remainingGroups);
+            return Math.max(1, delay);
+        }
+
         if (state.remainingGroups == 0) {
             state.remainingGroups = random(npc, settings.burstGroupsMin(), settings.burstGroupsMax());
             state.remainingShots = random(npc, settings.burstShotsMin(), settings.burstShotsMax());
         }
 
         state.remainingShots--;
-        // The shot interval is the base delay between every pair of trigger pulls.  The old
+        // The shot interval is the base delay between every pair of trigger pulls. The old
         // implementation skipped it for the final (and therefore for a one-shot) group, so a
         // default group size of one silently used only GroupInterval.  That made a visible
         // five-tick "single interval" have no effect at all.

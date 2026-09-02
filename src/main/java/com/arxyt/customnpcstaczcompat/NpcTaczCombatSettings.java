@@ -15,14 +15,16 @@ public record NpcTaczCombatSettings(int range, int accuracy,
                                     int burstGroupsMin, int burstGroupsMax,
                                     int groupIntervalMin, int groupIntervalMax) {
     /**
+     * Schema three preserves zero-valued cadence controls as explicit firing-mode switches.
      * Schema two separates an editor's reference values from an explicitly enabled firing
      * policy. Schema one was created automatically on first fire, which accidentally made a
      * normal TaCZ automatic weapon inherit CNPC's five-tick projectile rate.
      */
-    public static final int SCHEMA = 2;
+    public static final int SCHEMA = 3;
     public static final String ROOT_KEY = "customnpcs_tacz_compat_combat";
     private static final String SCHEMA_KEY = "Schema";
     private static final String CONFIGURED_KEY = "Configured";
+    private static final int PREVIOUS_SCHEMA = 2;
     private static final int LEGACY_SCHEMA = 1;
 
     /** Mirrors a newly-created CNPC's native ranged defaults. */
@@ -32,14 +34,38 @@ public record NpcTaczCombatSettings(int range, int accuracy,
     public NpcTaczCombatSettings {
         range = clamp(range, 1, 256);
         accuracy = clamp(accuracy, 0, 100);
-        shotIntervalMin = clamp(shotIntervalMin, 1, 7_200);
-        shotIntervalMax = Math.max(shotIntervalMin, clamp(shotIntervalMax, 1, 7_200));
-        burstShotsMin = clamp(burstShotsMin, 1, 64);
-        burstShotsMax = Math.max(burstShotsMin, clamp(burstShotsMax, 1, 64));
-        burstGroupsMin = clamp(burstGroupsMin, 1, 64);
-        burstGroupsMax = Math.max(burstGroupsMin, clamp(burstGroupsMax, 1, 64));
-        groupIntervalMin = clamp(groupIntervalMin, 1, 7_200);
-        groupIntervalMax = Math.max(groupIntervalMin, clamp(groupIntervalMax, 1, 7_200));
+        shotIntervalMin = clampCadence(shotIntervalMin, 7_200);
+        shotIntervalMax = clampCadence(shotIntervalMax, 7_200);
+        if (shotIntervalMin == 0 || shotIntervalMax == 0) {
+            shotIntervalMin = 0;
+            shotIntervalMax = 0;
+        } else {
+            shotIntervalMax = Math.max(shotIntervalMin, shotIntervalMax);
+        }
+        burstShotsMin = clampCadence(burstShotsMin, 64);
+        burstShotsMax = clampCadence(burstShotsMax, 64);
+        if (burstShotsMin == 0 || burstShotsMax == 0) {
+            burstShotsMin = 0;
+            burstShotsMax = 0;
+        } else {
+            burstShotsMax = Math.max(burstShotsMin, burstShotsMax);
+        }
+        burstGroupsMin = clampCadence(burstGroupsMin, 64);
+        burstGroupsMax = clampCadence(burstGroupsMax, 64);
+        if (burstGroupsMin == 0 || burstGroupsMax == 0) {
+            burstGroupsMin = 0;
+            burstGroupsMax = 0;
+        } else {
+            burstGroupsMax = Math.max(burstGroupsMin, burstGroupsMax);
+        }
+        groupIntervalMin = clampCadence(groupIntervalMin, 7_200);
+        groupIntervalMax = clampCadence(groupIntervalMax, 7_200);
+        if (groupIntervalMin == 0 || groupIntervalMax == 0) {
+            groupIntervalMin = 0;
+            groupIntervalMax = 0;
+        } else {
+            groupIntervalMax = Math.max(groupIntervalMin, groupIntervalMax);
+        }
     }
 
     /**
@@ -52,7 +78,7 @@ public record NpcTaczCombatSettings(int range, int accuracy,
         if (!root.contains(ROOT_KEY, Tag.TAG_COMPOUND)) return fromNativeRanged(npc);
         CompoundTag tag = root.getCompound(ROOT_KEY);
         int schema = tag.getInt(SCHEMA_KEY);
-        if (schema != SCHEMA && schema != LEGACY_SCHEMA) return fromNativeRanged(npc);
+        if (schema != SCHEMA && schema != PREVIOUS_SCHEMA && schema != LEGACY_SCHEMA) return fromNativeRanged(npc);
         return fromTag(tag);
     }
 
@@ -69,8 +95,27 @@ public record NpcTaczCombatSettings(int range, int accuracy,
         if (!root.contains(ROOT_KEY, Tag.TAG_COMPOUND)) return false;
         CompoundTag tag = root.getCompound(ROOT_KEY);
         int schema = tag.getInt(SCHEMA_KEY);
-        if (schema == SCHEMA) return tag.getBoolean(CONFIGURED_KEY);
+        if (schema == SCHEMA || schema == PREVIOUS_SCHEMA) return tag.getBoolean(CONFIGURED_KEY);
         return schema == LEGACY_SCHEMA && !fromTag(tag).equals(fromNativeRanged(npc));
+    }
+
+    /**
+     * Zero is an intentional mode selector, never a one-tick value:
+     * native automatic fire takes precedence over continuous point fire.
+     */
+    public CadenceMode cadenceMode() {
+        if (shotIntervalMax == 0 || burstShotsMax == 0) return CadenceMode.NATIVE_AUTO;
+        if (groupIntervalMax == 0 || burstGroupsMax == 0) return CadenceMode.CONTINUOUS_POINT;
+        return CadenceMode.INTERMITTENT_POINT;
+    }
+
+    public enum CadenceMode {
+        /** Leave cadence completely to TaCZ's selected fire mode and weapon cooldown. */
+        NATIVE_AUTO,
+        /** Repeat the configured shot interval without group pauses. */
+        CONTINUOUS_POINT,
+        /** Apply shot interval, shots per group, group count and group pause. */
+        INTERMITTENT_POINT
     }
 
     private static NpcTaczCombatSettings fromTag(CompoundTag tag) {
@@ -118,5 +163,10 @@ public record NpcTaczCombatSettings(int range, int accuracy,
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    /** Zero is valid syntax; a malformed negative packet must not silently select a mode. */
+    private static int clampCadence(int value, int max) {
+        return value == 0 ? 0 : clamp(value, 1, max);
     }
 }

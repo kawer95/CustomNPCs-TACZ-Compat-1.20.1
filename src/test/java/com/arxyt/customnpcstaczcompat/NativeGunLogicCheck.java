@@ -78,6 +78,27 @@ public final class NativeGunLogicCheck {
                 "group-count maximum must never fall below its minimum");
         check(sanitized.groupIntervalMin() == 90 && sanitized.groupIntervalMax() == 90,
                 "group interval maximum must never fall below its minimum");
+        NpcTaczCombatSettings nativeAuto = new NpcTaczCombatSettings(
+                15, 60, 0, 5, 1, 1, 1, 1, 20, 40);
+        check(nativeAuto.shotIntervalMin() == 0 && nativeAuto.shotIntervalMax() == 0,
+                "a zero shot interval must remain an explicit mode value");
+        check(nativeAuto.cadenceMode() == NpcTaczCombatSettings.CadenceMode.NATIVE_AUTO,
+                "a zero shot interval must select native TaCZ automatic fire");
+        NpcTaczCombatSettings nativeAutoByShots = new NpcTaczCombatSettings(
+                15, 60, 5, 5, 1, 0, 1, 1, 20, 40);
+        check(nativeAutoByShots.cadenceMode() == NpcTaczCombatSettings.CadenceMode.NATIVE_AUTO,
+                "a zero maximum shots-per-group must select native TaCZ automatic fire");
+        NpcTaczCombatSettings continuousPoint = new NpcTaczCombatSettings(
+                15, 60, 5, 5, 1, 1, 1, 0, 20, 40);
+        check(continuousPoint.cadenceMode() == NpcTaczCombatSettings.CadenceMode.CONTINUOUS_POINT,
+                "a zero maximum group count must select continuous point fire");
+        NpcTaczCombatSettings continuousPointByInterval = new NpcTaczCombatSettings(
+                15, 60, 5, 5, 1, 1, 1, 1, 0, 40);
+        check(continuousPointByInterval.cadenceMode() == NpcTaczCombatSettings.CadenceMode.CONTINUOUS_POINT,
+                "a zero group interval must select continuous point fire");
+        check(NpcTaczCombatSettings.DEFAULT.cadenceMode()
+                        == NpcTaczCombatSettings.CadenceMode.INTERMITTENT_POINT,
+                "fully populated controls must select intermittent point fire");
         check(sanitized.toTag().getInt("Schema") == NpcTaczCombatSettings.SCHEMA,
                 "combat settings NBT schema changed unexpectedly");
         check(sanitized.toTag().getBoolean("Configured"),

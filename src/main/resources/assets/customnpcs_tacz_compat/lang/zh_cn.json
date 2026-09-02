@@ -10,5 +10,8 @@
   "gui.customnpcs_tacz_compat.combat.shot_interval": "单发间隔 (tick)",
   "gui.customnpcs_tacz_compat.combat.burst_shots": "每组连射数",
   "gui.customnpcs_tacz_compat.combat.burst_groups": "连射组数",
-  "gui.customnpcs_tacz_compat.combat.group_interval": "组间间隔 (tick)"
+  "gui.customnpcs_tacz_compat.combat.group_interval": "组间间隔 (tick)",
+  "gui.customnpcs_tacz_compat.combat.mode.native_auto": "当前为原生全自动射击",
+  "gui.customnpcs_tacz_compat.combat.mode.continuous_point": "当前为持续点射模式",
+  "gui.customnpcs_tacz_compat.combat.mode.intermittent_point": "当前为间歇式点射模式"
 }
