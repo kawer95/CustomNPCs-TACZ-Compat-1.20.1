@@ -2,9 +2,10 @@ package com.arxyt.customnpcstaczcompat;
 
 import com.arxyt.customnpcstaczcompat.client.ClientAimSync;
 import com.arxyt.customnpcstaczcompat.client.ClientCombatSettings;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkDirection;
@@ -12,6 +13,9 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+import noppes.npcs.CustomItems;
+import noppes.npcs.CustomNpcsPermissions;
+import noppes.npcs.NoppesUtilServer;
 import noppes.npcs.entity.EntityNPCInterface;
 
 import java.util.function.Supplier;
@@ -87,6 +91,8 @@ public final class NativeGunNetwork {
         if (npc != null) {
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new CombatSettingsSnapshot(npc.getId(), NpcTaczCombatSettings.resolve(npc)));
+        } else {
+            reportCombatSettingsDenied(player);
         }
         context.get().setPacketHandled(true);
     }
@@ -100,6 +106,19 @@ public final class NativeGunNetwork {
             NpcTaczCombatApi.resetPattern(npc);
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new CombatSettingsSnapshot(npc.getId(), NpcTaczCombatSettings.resolve(npc)));
+            player.displayClientMessage(Component.translatable(
+                    "message.customnpcs_tacz_compat.combat_saved", npc.getDisplayName()), true);
+            CustomNpcsTaczCompat.LOGGER.info(
+                    "[CNPC-TACZ-COMBAT] saved npcId={} player={} range={} accuracy={} shotInterval={}-{} " +
+                            "shotsPerGroup={}-{} groups={}-{} groupInterval={}-{}",
+                    npc.getId(), player.getGameProfile().getName(), message.settings().range(),
+                    message.settings().accuracy(), message.settings().shotIntervalMin(),
+                    message.settings().shotIntervalMax(), message.settings().burstShotsMin(),
+                    message.settings().burstShotsMax(), message.settings().burstGroupsMin(),
+                    message.settings().burstGroupsMax(), message.settings().groupIntervalMin(),
+                    message.settings().groupIntervalMax());
+        } else {
+            reportCombatSettingsDenied(player);
         }
         context.get().setPacketHandled(true);
     }
@@ -111,11 +130,25 @@ public final class NativeGunNetwork {
         context.get().setPacketHandled(true);
     }
 
-    /** CNPC's editor itself is operator-gated; enforce the same authority on this custom packet. */
+    /**
+     * Exact authority model used by CNPC's MODEL/DISPLAY menu packets. In particular, CNPC's
+     * editable GUI is not synonymous with vanilla permission level 2: single-player worlds
+     * without cheats and servers with a CustomNPC permission provider may legitimately grant
+     * this page while {@link ServerPlayer#hasPermissions(int)} is false.
+     */
     private static EntityNPCInterface configurableNpc(ServerPlayer player, int entityId) {
-        if (player == null || !player.hasPermissions(2)) return null;
-        Entity entity = player.level().getEntity(entityId);
-        return entity instanceof EntityNPCInterface npc ? npc : null;
+        if (player == null) return null;
+        EntityNPCInterface npc = NoppesUtilServer.getEditingNpc(player);
+        if (npc == null || npc.getId() != entityId) return null;
+        if (!CustomNpcsPermissions.hasPermission(player, CustomNpcsPermissions.NPC_DISPLAY)) return null;
+        return player.getMainHandItem().getItem() == CustomItems.wand ? npc : null;
+    }
+
+    private static void reportCombatSettingsDenied(ServerPlayer player) {
+        if (player != null) {
+            player.displayClientMessage(Component.translatable(
+                    "message.customnpcs_tacz_compat.combat_denied").withStyle(ChatFormatting.RED), true);
+        }
     }
 
     private static void writeSettings(net.minecraft.network.FriendlyByteBuf buffer,

@@ -1,5 +1,7 @@
 {
   "message.customnpcs_tacz_compat.ammo_insufficient": "%s 弹药不足",
+  "message.customnpcs_tacz_compat.combat_saved": "已保存 %s 的 TaCZ 战术射击设置",
+  "message.customnpcs_tacz_compat.combat_denied": "未保存 TaCZ 战术设置：请保持正在编辑该 NPC，并手持 NPC 权杖",
   "gui.customnpcs_tacz_compat.combat.tab": "TaCZ 战术",
   "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ 战术射击",
   "gui.customnpcs_tacz_compat.combat.description": "仅影响 TaCZ 枪械；范围、命中率和连射节奏独立保存。",

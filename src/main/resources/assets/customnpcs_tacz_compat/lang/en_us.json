@@ -1,5 +1,7 @@
 {
   "message.customnpcs_tacz_compat.ammo_insufficient": "%s is out of ammunition",
+  "message.customnpcs_tacz_compat.combat_saved": "Saved TaCZ combat settings for %s",
+  "message.customnpcs_tacz_compat.combat_denied": "TaCZ combat settings were not saved: keep editing this NPC and hold the NPC Wand.",
   "gui.customnpcs_tacz_compat.combat.tab": "TaCZ Tactics",
   "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ Tactical Fire",
   "gui.customnpcs_tacz_compat.combat.description": "TaCZ guns only. Range, accuracy and firing cadence are saved separately.",
