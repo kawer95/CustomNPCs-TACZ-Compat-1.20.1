@@ -137,6 +137,13 @@ public final class NativeTaczGunGoal extends Goal {
             return;
         }
         if (command.active()) {
+            if (DominionCommandBridge.isBreachEntering(npc)) {
+                // Dominion owns doorway navigation until this NPC crosses the threshold. Keep
+                // firing, but never pursue, retreat or strafe away from that entry path.
+                strafeTime = -1;
+                backwards = false;
+                return;
+            }
             GunTactics.Maneuver maneuver = command.watching() ? GunTactics.Maneuver.SENTRY
                     : GunTactics.decideControlled(command.commandedAttack(), canSee, distance,
                     GunTactics.commandedApproachDistance(range),
