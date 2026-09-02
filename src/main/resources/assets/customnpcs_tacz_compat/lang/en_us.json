@@ -1,3 +1,12 @@
 {
-  "message.customnpcs_tacz_compat.ammo_insufficient": "%s is out of ammunition"
+  "message.customnpcs_tacz_compat.ammo_insufficient": "%s is out of ammunition",
+  "gui.customnpcs_tacz_compat.combat.tab": "TaCZ Tactics",
+  "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ Tactical Fire",
+  "gui.customnpcs_tacz_compat.combat.description": "TaCZ guns only. Range, accuracy and firing cadence are saved separately.",
+  "gui.customnpcs_tacz_compat.combat.range": "Firing range",
+  "gui.customnpcs_tacz_compat.combat.accuracy": "Accuracy",
+  "gui.customnpcs_tacz_compat.combat.shot_interval": "Shot interval (ticks)",
+  "gui.customnpcs_tacz_compat.combat.burst_shots": "Shots per group",
+  "gui.customnpcs_tacz_compat.combat.burst_groups": "Groups per burst",
+  "gui.customnpcs_tacz_compat.combat.group_interval": "Group interval (ticks)"
 }

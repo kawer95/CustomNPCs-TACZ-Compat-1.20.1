@@ -1,7 +1,10 @@
 package com.arxyt.customnpcstaczcompat;
 
 import com.arxyt.customnpcstaczcompat.client.ClientAimSync;
+import com.arxyt.customnpcstaczcompat.client.ClientCombatSettings;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkDirection;
@@ -15,7 +18,7 @@ import java.util.function.Supplier;
 
 /** Lightweight exact body/head rotation sync; CNPC's full update packet omits live rotations. */
 public final class NativeGunNetwork {
-    private static final String VERSION = "1";
+    private static final String VERSION = "2";
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(CustomNpcsTaczCompat.MOD_ID, "main"), () -> VERSION,
             VERSION::equals, VERSION::equals);
@@ -34,10 +37,41 @@ public final class NativeGunNetwork {
                         buffer.readBoolean()))
                 .consumerMainThread(NativeGunNetwork::handleAimSync)
                 .add();
+        CHANNEL.messageBuilder(CombatSettingsRequest.class, 1, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((message, buffer) -> buffer.writeVarInt(message.entityId()))
+                .decoder(buffer -> new CombatSettingsRequest(buffer.readVarInt()))
+                .consumerMainThread(NativeGunNetwork::handleCombatSettingsRequest)
+                .add();
+        CHANNEL.messageBuilder(CombatSettingsSnapshot.class, 2, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((message, buffer) -> {
+                    buffer.writeVarInt(message.entityId());
+                    writeSettings(buffer, message.settings());
+                })
+                .decoder(buffer -> new CombatSettingsSnapshot(buffer.readVarInt(), readSettings(buffer)))
+                .consumerMainThread(NativeGunNetwork::handleCombatSettingsSnapshot)
+                .add();
+        CHANNEL.messageBuilder(CombatSettingsSave.class, 3, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((message, buffer) -> {
+                    buffer.writeVarInt(message.entityId());
+                    writeSettings(buffer, message.settings());
+                })
+                .decoder(buffer -> new CombatSettingsSave(buffer.readVarInt(), readSettings(buffer)))
+                .consumerMainThread(NativeGunNetwork::handleCombatSettingsSave)
+                .add();
     }
 
     public static void syncAim(EntityNPCInterface npc, float yaw, float pitch, boolean snap) {
         CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> npc), new AimSync(npc.getId(), yaw, pitch, snap));
+    }
+
+    /** Client-only request used by the dedicated CNPC TaCZ combat tab. */
+    public static void requestCombatSettings(int entityId) {
+        CHANNEL.sendToServer(new CombatSettingsRequest(entityId));
+    }
+
+    /** Client-only save used by the dedicated CNPC TaCZ combat tab. */
+    public static void saveCombatSettings(int entityId, NpcTaczCombatSettings settings) {
+        CHANNEL.sendToServer(new CombatSettingsSave(entityId, settings));
     }
 
     private static void handleAimSync(AimSync message, Supplier<NetworkEvent.Context> context) {
@@ -46,5 +80,67 @@ public final class NativeGunNetwork {
         context.get().setPacketHandled(true);
     }
 
+    private static void handleCombatSettingsRequest(CombatSettingsRequest message,
+                                                     Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        EntityNPCInterface npc = configurableNpc(player, message.entityId());
+        if (npc != null) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new CombatSettingsSnapshot(npc.getId(), NpcTaczCombatSettings.resolve(npc)));
+        }
+        context.get().setPacketHandled(true);
+    }
+
+    private static void handleCombatSettingsSave(CombatSettingsSave message,
+                                                  Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        EntityNPCInterface npc = configurableNpc(player, message.entityId());
+        if (npc != null) {
+            NpcTaczCombatSettings.save(npc, message.settings());
+            NpcTaczCombatApi.resetPattern(npc);
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new CombatSettingsSnapshot(npc.getId(), NpcTaczCombatSettings.resolve(npc)));
+        }
+        context.get().setPacketHandled(true);
+    }
+
+    private static void handleCombatSettingsSnapshot(CombatSettingsSnapshot message,
+                                                      Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                () -> () -> ClientCombatSettings.accept(message.entityId(), message.settings()));
+        context.get().setPacketHandled(true);
+    }
+
+    /** CNPC's editor itself is operator-gated; enforce the same authority on this custom packet. */
+    private static EntityNPCInterface configurableNpc(ServerPlayer player, int entityId) {
+        if (player == null || !player.hasPermissions(2)) return null;
+        Entity entity = player.level().getEntity(entityId);
+        return entity instanceof EntityNPCInterface npc ? npc : null;
+    }
+
+    private static void writeSettings(net.minecraft.network.FriendlyByteBuf buffer,
+                                      NpcTaczCombatSettings settings) {
+        buffer.writeVarInt(settings.range());
+        buffer.writeVarInt(settings.accuracy());
+        buffer.writeVarInt(settings.shotIntervalMin());
+        buffer.writeVarInt(settings.shotIntervalMax());
+        buffer.writeVarInt(settings.burstShotsMin());
+        buffer.writeVarInt(settings.burstShotsMax());
+        buffer.writeVarInt(settings.burstGroupsMin());
+        buffer.writeVarInt(settings.burstGroupsMax());
+        buffer.writeVarInt(settings.groupIntervalMin());
+        buffer.writeVarInt(settings.groupIntervalMax());
+    }
+
+    private static NpcTaczCombatSettings readSettings(net.minecraft.network.FriendlyByteBuf buffer) {
+        return new NpcTaczCombatSettings(
+                buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                buffer.readVarInt(), buffer.readVarInt());
+    }
+
     private record AimSync(int entityId, float yaw, float pitch, boolean snap) { }
+    private record CombatSettingsRequest(int entityId) { }
+    private record CombatSettingsSnapshot(int entityId, NpcTaczCombatSettings settings) { }
+    private record CombatSettingsSave(int entityId, NpcTaczCombatSettings settings) { }
 }

@@ -59,9 +59,27 @@ public final class NativeGunLogicCheck {
                 "sprint recovery timeout changed");
         check(NativeGunTimeoutPolicy.timeoutTicks("IS_RELOADING") == 600,
                 "legitimate long reloads need a conservative timeout");
+        checkCombatSettingsValidation();
         checkMovementSampling();
         checkOnceAnimationArbitration();
         System.out.println("Native CNPC TaCZ pure-logic checks passed");
+    }
+
+    private static void checkCombatSettingsValidation() {
+        NpcTaczCombatSettings sanitized = new NpcTaczCombatSettings(
+                -1, 101, 80, -5, 16, 3, 12, 4, 90, 2);
+        check(sanitized.range() == 1, "TaCZ range must keep a positive lower bound");
+        check(sanitized.accuracy() == 100, "TaCZ accuracy must clamp to a percentage");
+        check(sanitized.shotIntervalMin() == 80 && sanitized.shotIntervalMax() == 80,
+                "shot interval maximum must never fall below its minimum");
+        check(sanitized.burstShotsMin() == 16 && sanitized.burstShotsMax() == 16,
+                "shots-per-group maximum must never fall below its minimum");
+        check(sanitized.burstGroupsMin() == 12 && sanitized.burstGroupsMax() == 12,
+                "group-count maximum must never fall below its minimum");
+        check(sanitized.groupIntervalMin() == 90 && sanitized.groupIntervalMax() == 90,
+                "group interval maximum must never fall below its minimum");
+        check(sanitized.toTag().getInt("Schema") == NpcTaczCombatSettings.SCHEMA,
+                "combat settings NBT schema changed unexpectedly");
     }
 
     private static void checkMovementSampling() {

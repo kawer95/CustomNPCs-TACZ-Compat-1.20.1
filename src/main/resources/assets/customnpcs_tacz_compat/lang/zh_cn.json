@@ -1,3 +1,12 @@
 {
-  "message.customnpcs_tacz_compat.ammo_insufficient": "%s 弹药不足"
+  "message.customnpcs_tacz_compat.ammo_insufficient": "%s 弹药不足",
+  "gui.customnpcs_tacz_compat.combat.tab": "TaCZ 战术",
+  "gui.customnpcs_tacz_compat.combat.title": "CNPC TaCZ 战术射击",
+  "gui.customnpcs_tacz_compat.combat.description": "仅影响 TaCZ 枪械；范围、命中率和连射节奏独立保存。",
+  "gui.customnpcs_tacz_compat.combat.range": "射击距离",
+  "gui.customnpcs_tacz_compat.combat.accuracy": "命中率",
+  "gui.customnpcs_tacz_compat.combat.shot_interval": "单发间隔 (tick)",
+  "gui.customnpcs_tacz_compat.combat.burst_shots": "每组连射数",
+  "gui.customnpcs_tacz_compat.combat.burst_groups": "连射组数",
+  "gui.customnpcs_tacz_compat.combat.group_interval": "组间间隔 (tick)"
 }

@@ -29,7 +29,7 @@ public final class WatchTaczGunGoal extends Goal {
         if (target == null) { NativeGunRuntime.tacz().continueWatchFire(npc); return; }
         double distance = npc.distanceTo(target);
         double range = DominionCommandBridge.watchRange(npc,
-                Math.max(2.0D, npc.stats.ranged.getRange() * 2.0D));
+                Math.max(2.0D, NpcTaczCombatApi.range(npc) * 2.0D));
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "WATCH", "DOMINION_RELOAD_ACTIVE", command, target,

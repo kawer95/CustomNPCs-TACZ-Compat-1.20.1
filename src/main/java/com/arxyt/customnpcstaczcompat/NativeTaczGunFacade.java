@@ -72,6 +72,10 @@ public final class NativeTaczGunFacade {
             NativeGunDiagnostics.operate(shooter, target, "INVALID_GUN_OR_TARGET");
             return Action.waitFor(20);
         }
+        if (!NpcTaczCombatApi.allowsShot(shooter)) {
+            NativeGunDiagnostics.operate(shooter, target, "TACTICAL_BURST_GATE");
+            return Action.waitFor(1);
+        }
         GunData data = index.get().getGunData();
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
         prepareImmediateFire(shooter, operator);
@@ -86,7 +90,7 @@ public final class NativeTaczGunFacade {
         DominionCombatBalance.Settings balance = DominionCombatBalance.settings();
         boolean machineGun = GunTabType.MG.name().equalsIgnoreCase(index.get().getType());
         boolean sniperRifle = GunTabType.SNIPER.name().equalsIgnoreCase(index.get().getType());
-        int effectiveAccuracy = effectiveAccuracy(shooter.stats.ranged.getAccuracy(),
+        int effectiveAccuracy = effectiveAccuracy(NpcTaczCombatApi.accuracy(shooter),
                 balance.available() && balance.customNpcStandingMachineGunAccuracyPenalty(), machineGun,
                 sniperRifle, operator.getDataHolder().isCrawling);
         float adjustedYaw = aim.yaw() + accuracyError(shooter, target, horizontalDistance, effectiveAccuracy);
@@ -119,7 +123,7 @@ public final class NativeTaczGunFacade {
             failures.remove(shooter);
         }
         return switch (result) {
-            case SUCCESS -> new Action(successDelay(gun, stack, shooter), true);
+            case SUCCESS -> new Action(NpcTaczCombatApi.recordSuccessfulShot(shooter), true);
             case NOT_DRAW -> Action.waitFor(1);
             case NEED_BOLT -> {
                 operator.bolt();
@@ -155,10 +159,13 @@ public final class NativeTaczGunFacade {
             watchTriggers.remove(shooter);
             return Action.waitFor(1);
         }
+        if (!NpcTaczCombatApi.allowsShot(shooter)) return Action.waitFor(1);
         IGunOperator operator = IGunOperator.fromLivingEntity(shooter);
         prepareImmediateFire(shooter, operator);
         ShootResult result = heldTriggerShoot(shooter, operator, gun, stack, index.get().getGunData(), state.pitch, state.yaw);
-        return new Action(1, result == ShootResult.SUCCESS);
+        return result == ShootResult.SUCCESS
+                ? new Action(NpcTaczCombatApi.recordSuccessfulShot(shooter), true)
+                : new Action(1, false);
     }
 
     private ShootResult heldTriggerShoot(EntityNPCInterface shooter, IGunOperator operator, IGun gun,
@@ -192,6 +199,7 @@ public final class NativeTaczGunFacade {
         if (operator.getSynIsAiming() && (forceExitAim || !DominionCommandBridge.hasQueuedAttack(shooter))) {
             operator.aim(false);
         }
+        if (forceExitAim) NpcTaczCombatApi.resetPattern(shooter);
         if (forceExitAim || !DominionCommandBridge.watchContinuousFireRequested(shooter)) watchTriggers.remove(shooter);
     }
 
@@ -214,11 +222,6 @@ public final class NativeTaczGunFacade {
     }
 
     private static int seconds(float seconds) { return Math.max(1, Math.round(seconds * 20.0F)); }
-
-    private static int successDelay(IGun gun, ItemStack stack, EntityNPCInterface shooter) {
-        FireMode mode = gun.getFireMode(stack);
-        return mode == FireMode.SEMI || mode == FireMode.BURST ? 10 + shooter.getRandom().nextInt(5) : 2;
-    }
 
     /** Preserves CNPC accuracy as a hit probability while leaving TaCZ weapon spread intact. */
     private static float accuracyError(EntityNPCInterface shooter, LivingEntity target, double distance, int accuracy) {

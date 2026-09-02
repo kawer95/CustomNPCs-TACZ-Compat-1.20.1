@@ -10,6 +10,7 @@
     "EntityNPCInterfaceMixin"
   ],
   "client": [
+    "client.GuiNpcMenuMixin",
     "client.ModelClassicPlayerMixin",
     "client.PlayerModelMixin",
     "client.RenderNPCInterfaceMixin",

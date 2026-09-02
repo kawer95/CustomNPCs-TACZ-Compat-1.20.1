@@ -218,12 +218,10 @@ public final class NativeTaczGunGoal extends Goal {
 
     private double range(DominionCommandBridge.Snapshot command) {
         if (command.watching()) return DominionCommandBridge.watchRange(npc,
-                Math.max(2.0D, npc.stats.ranged.getRange() * 2.0D));
-        if (command.active()) return Math.max(1.0D, npc.stats.ranged.getRange());
-        return switch (NativeGunRuntime.tacz().rangeClass(npc.getMainHandItem())) {
-            case NEAR -> Math.min(NativeGunConfig.NEAR_DISTANCE.get(), npc.stats.aggroRange);
-            case MEDIUM -> Math.min(NativeGunConfig.MEDIUM_DISTANCE.get(), npc.stats.aggroRange);
-            case LONG -> Math.min(NativeGunConfig.LONG_DISTANCE.get(), npc.stats.aggroRange);
-        };
+                Math.max(2.0D, NpcTaczCombatApi.range(npc) * 2.0D));
+        // The dedicated TaCZ page owns firing range for both ordered and autonomous combat.
+        // CNPC's aggro range still decides who is acquired; it no longer silently replaces the
+        // weapon range after a target has been acquired.
+        return Math.max(1.0D, NpcTaczCombatApi.range(npc));
     }
 }

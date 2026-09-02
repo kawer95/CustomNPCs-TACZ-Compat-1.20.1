@@ -20,7 +20,9 @@ The release jar never bundles or relocates PlayerAnimator. `mods.toml` intention
 
 ## Behavior
 
-- Native CNPCs holding TaCZ guns draw, ADS, shoot, bolt, reload, consume CNPC inventory ammunition, and use CNPC ranged accuracy.
+- Native CNPCs holding TaCZ guns draw, ADS, shoot, bolt, reload, and consume CNPC inventory ammunition.
+- The CustomNPC editor has a second-row **TaCZ Tactics** tab. Its per-NPC saved settings own TaCZ firing range, hit probability, randomized shots per group, randomized groups per sequence, randomized shot interval, and randomized inter-group interval. The underlying weapon still enforces its own magazine, fire-mode, reload, bolt, and mechanical cooldown rules.
+- Existing NPCs snapshot their current native ranged values into this page's data the first time TaCZ uses them. This preserves already-configured units during upgrade, while every later TaCZ shot uses only the dedicated page.
 - Movement supports native pursuit/strafe/retreat plus Dominion watch, sentry, close-quarters, prone, and queued target behavior.
 - Friendly CNPC/player factions are protected from TaCZ bullet and bullet-explosion damage.
 - Steve, Alex, Classic, and 64×32 player-style CNPC models receive PlayerAnimator lower-body, upper-body, one-shot, and root-body layers.
@@ -37,7 +39,7 @@ Current TaCZ packs generally do not publish explicit `draw_upper` / `bolt_upper`
 
 Run `gradlew.bat test jar` from this directory. `test` executes the pure combat-policy verification task before the standard Gradle lifecycle task. The verification avoids ForgeGradle's JUnit worker, which cannot resolve test output in the current non-ASCII mapped workspace path. For a local client smoke test at the compile baseline, use `gradlew.bat runClient -Pwith_playeranimator`; that opt-in never changes the release jar.
 
-Manual in-game acceptance is still required for each supported model: idle, walk/run, ADS, semi/auto fire, empty reload, bolt, prone, resource reload, YSM coexistence, and a dedicated server without PlayerAnimator.
+Manual in-game acceptance is still required for each supported model: editor tab layout, migrated range/accuracy, fixed and randomized burst settings, semi/auto fire, empty reload, bolt, prone, resource reload, YSM coexistence, and a dedicated server without PlayerAnimator.
 
 ## License
 

@@ -1,0 +1,37 @@
+package com.arxyt.customnpcstaczcompat;
+
+import noppes.npcs.entity.EntityNPCInterface;
+
+/**
+ * Stable optional API for other CNPC add-ons.  CNPC-YSM reaches this class reflectively, so it
+ * never becomes a runtime requirement for the YSM-only installation.
+ */
+public final class NpcTaczCombatApi {
+    private NpcTaczCombatApi() { }
+
+    public static boolean configured(EntityNPCInterface npc) {
+        return NpcTaczCombatSettings.isConfigured(npc);
+    }
+
+    public static int range(EntityNPCInterface npc) {
+        return NpcTaczCombatSettings.resolve(npc).range();
+    }
+
+    public static int accuracy(EntityNPCInterface npc) {
+        return NpcTaczCombatSettings.resolve(npc).accuracy();
+    }
+
+    /** Whether the configured burst state currently permits another TaCZ trigger pull. */
+    public static boolean allowsShot(EntityNPCInterface npc) {
+        return NpcTaczFirePattern.allowsShot(npc);
+    }
+
+    /** Records a successful TaCZ trigger pull and returns the configured minimum wait in ticks. */
+    public static int recordSuccessfulShot(EntityNPCInterface npc) {
+        return NpcTaczFirePattern.recordSuccessfulShot(npc);
+    }
+
+    public static void resetPattern(EntityNPCInterface npc) {
+        NpcTaczFirePattern.reset(npc);
+    }
+}

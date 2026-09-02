@@ -27,7 +27,7 @@ public final class SentryTaczGunGoal extends Goal {
         if (target == null) return;
         npc.getNavigation().stop();
         npc.getMoveControl().strafe(0.0F, 0.0F);
-        double range = Math.max(1.0D, npc.stats.ranged.getRange());
+        double range = Math.max(1.0D, NpcTaczCombatApi.range(npc));
         double distance = npc.distanceTo(target);
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeGunDiagnostics.gate(npc, "SENTRY", "DOMINION_RELOAD_ACTIVE", command, target,
@@ -78,6 +78,6 @@ public final class SentryTaczGunGoal extends Goal {
         if (command.watching() || !command.stationarySentry() || !NativeNpcEligibility.active(npc)) return null;
         LivingEntity target = npc.getTarget();
         return target != null && target != npc && target.isAlive()
-                && npc.distanceTo(target) <= Math.max(1.0D, npc.stats.ranged.getRange()) ? target : null;
+                && npc.distanceTo(target) <= Math.max(1.0D, NpcTaczCombatApi.range(npc)) ? target : null;
     }
 }
