@@ -35,7 +35,8 @@ public final class SentryTaczGunGoal extends Goal {
             return;
         }
         DominionCombatBalance.Settings settings = DominionCombatBalance.settings();
-        if (NativeNpcTargetReaction.blocks(npc, target, settings, false)) {
+        if (NativeNpcTargetReaction.blocks(npc, target, settings,
+                DominionCommandBridge.bypassesTargetReaction(npc))) {
             NativeGunDiagnostics.gate(npc, "SENTRY", "TARGET_REACTION_DELAY", command, target,
                     false, false, false, distance, range, cooldown);
             NativeGunRuntime.tacz().stop(npc, false);

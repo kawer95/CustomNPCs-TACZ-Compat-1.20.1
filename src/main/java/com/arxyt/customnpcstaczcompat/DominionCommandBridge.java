@@ -18,6 +18,7 @@ public final class DominionCommandBridge {
     private static final String DOMINION_DIRECT_ATTACK = "DominionOfflineAttack";
     private static final String ATTACK_ORDER = "attack";
     private static final String WATCH_ORDER = "watch";
+    private static final String BREACH_ORDER = "breach";
     private static final Snapshot UNAVAILABLE = new Snapshot(false, false, false, false, false, false, false, false, null);
     private static final AtomicBoolean ERROR_REPORTED = new AtomicBoolean();
     private static volatile Access access;
@@ -47,6 +48,10 @@ public final class DominionCommandBridge {
                     optionalUnreflect(lookup, api, "watchRange", Mob.class, int.class),
                     optionalUnreflect(lookup, api, "watchHasClearShot", Mob.class, LivingEntity.class),
                     optionalUnreflect(lookup, api, "watchAimPoint", Mob.class, LivingEntity.class),
+                    optionalUnreflect(lookup, api, "bypassesTargetReaction", Mob.class),
+                    optionalUnreflect(lookup, api, "bypassesCustomCadence", Mob.class),
+                    optionalUnreflect(lookup, api, "isBreachAssault", Mob.class),
+                    optionalUnreflect(lookup, api, "breachAimPoint", Mob.class, LivingEntity.class),
                     optionalUnreflect(lookup, watchService, "continuousFireRequested", Mob.class),
                     optionalUnreflect(lookup, reloadApi, "isReloadActive", Mob.class),
                     optionalUnreflect(lookup, reloadApi, "requestReload", Mob.class));
@@ -96,7 +101,44 @@ public final class DominionCommandBridge {
     }
 
     static boolean hasQueuedAttack(String order, int queueEntries) {
-        return (ATTACK_ORDER.equals(order) || WATCH_ORDER.equals(order)) && queueEntries > 0;
+        return (ATTACK_ORDER.equals(order) || WATCH_ORDER.equals(order) || BREACH_ORDER.equals(order))
+                && queueEntries > 0;
+    }
+
+    public static boolean bypassesTargetReaction(Mob unit) {
+        return invokeBoolean(access == null ? null : access.bypassTargetReaction, unit);
+    }
+
+    public static boolean bypassesCustomCadence(Mob unit) {
+        return invokeBoolean(access == null ? null : access.bypassCustomCadence, unit);
+    }
+
+    public static boolean isBreachAssault(Mob unit) {
+        return invokeBoolean(access == null ? null : access.breachAssault, unit);
+    }
+
+    public static Vec3 breachAimPoint(Mob unit, LivingEntity target, Vec3 fallback) {
+        Access current = access;
+        if (current == null || current.breachAimPoint == null || unit == null || target == null
+                || unit.level().isClientSide) return fallback;
+        try {
+            Object value = current.breachAimPoint.invoke(unit, target);
+            return value instanceof Vec3 point ? point : null;
+        } catch (Throwable error) {
+            report(error);
+            return fallback;
+        }
+    }
+
+    private static boolean invokeBoolean(MethodHandle handle, Mob unit) {
+        if (handle == null || unit == null || unit.level().isClientSide) return false;
+        try {
+            Object value = handle.invoke(unit);
+            return value instanceof Boolean enabled && enabled;
+        } catch (Throwable error) {
+            report(error);
+            return false;
+        }
     }
 
     public static double commandMovementSpeed(Mob unit, double fallback) {
@@ -248,6 +290,8 @@ public final class DominionCommandBridge {
                           MethodHandle closeQuarters, MethodHandle prone, MethodHandle watching,
                           MethodHandle attackTarget, MethodHandle movementSpeed, MethodHandle watchRange,
                           MethodHandle watchHasClearShot, MethodHandle watchAimPoint,
+                          MethodHandle bypassTargetReaction, MethodHandle bypassCustomCadence,
+                          MethodHandle breachAssault, MethodHandle breachAimPoint,
                           MethodHandle watchContinuousFire, MethodHandle reloadActive,
                           MethodHandle requestReload) {
     }

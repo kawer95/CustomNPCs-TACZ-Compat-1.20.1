@@ -41,6 +41,7 @@ public final class NativeGunLogicCheck {
         check(GunTactics.effectiveLineOfSight(true, true, false) == false,
                 "watch must use Dominion's authoritative ray result");
         check(DominionCommandBridge.hasQueuedAttack("watch", 1), "watch queue should retain ADS");
+        check(DominionCommandBridge.hasQueuedAttack("breach", 1), "breach queue should retain ADS");
         check(DominionCommandBridge.isDirectSingleTargetAttack("attack", true),
                 "direct attack snapshot changed");
         check(!DominionCommandBridge.isDirectSingleTargetAttack("attack", false),

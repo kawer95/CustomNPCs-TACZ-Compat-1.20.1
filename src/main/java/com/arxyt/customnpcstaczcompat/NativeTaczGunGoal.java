@@ -82,7 +82,8 @@ public final class NativeTaczGunGoal extends Goal {
         if (command.commandedAttack() && npc.getTarget() != target) npc.setTarget(target);
 
         DominionCombatBalance.Settings settings = DominionCombatBalance.settings();
-        if (NativeNpcTargetReaction.blocks(npc, target, settings, command.directAttackOrder())) {
+        if (NativeNpcTargetReaction.blocks(npc, target, settings,
+                command.directAttackOrder() || DominionCommandBridge.bypassesTargetReaction(npc))) {
             NativeGunDiagnostics.gate(npc, "REGULAR", "TARGET_REACTION_DELAY", command, target,
                     false, false, false, npc.distanceTo(target), range(command), cooldown);
             hold(command);
@@ -96,10 +97,13 @@ public final class NativeTaczGunGoal extends Goal {
         double desired = range(command);
         double distance = npc.distanceTo(target);
         boolean vanillaCanSee = npc.getSensing().hasLineOfSight(target);
-        Vec3 aimPoint = command.watching()
+        boolean breach = DominionCommandBridge.isBreachAssault(npc);
+        Vec3 aimPoint = breach
+                ? DominionCommandBridge.breachAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
+                : command.watching()
                 ? DominionCommandBridge.watchAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
                 : target.getEyePosition();
-        boolean canSee = command.watching() ? aimPoint != null : vanillaCanSee;
+        boolean canSee = command.watching() || breach ? aimPoint != null : vanillaCanSee;
         boolean aimReady = canSee && NpcGunAimLock.prepareForShot(npc, target,
                 command.commandedAttack(), aimPoint);
         maneuver(command, target, canSee, distance, desired);
@@ -217,6 +221,7 @@ public final class NativeTaczGunGoal extends Goal {
     }
 
     private double range(DominionCommandBridge.Snapshot command) {
+        if (DominionCommandBridge.isBreachAssault(npc)) return 64.0D;
         if (command.watching()) return DominionCommandBridge.watchRange(npc,
                 Math.max(2.0D, NpcTaczCombatApi.range(npc) * 2.0D));
         // The dedicated TaCZ page owns firing range for both ordered and autonomous combat.

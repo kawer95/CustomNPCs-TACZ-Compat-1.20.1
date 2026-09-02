@@ -38,7 +38,8 @@ public final class WatchTaczGunGoal extends Goal {
         }
         if (npc.getTarget() != target) npc.setTarget(target);
         DominionCombatBalance.Settings settings = DominionCombatBalance.settings();
-        if (NativeNpcTargetReaction.blocks(npc, target, settings, command.directAttackOrder())) {
+        if (NativeNpcTargetReaction.blocks(npc, target, settings,
+                command.directAttackOrder() || DominionCommandBridge.bypassesTargetReaction(npc))) {
             NativeGunDiagnostics.gate(npc, "WATCH", "TARGET_REACTION_DELAY", command, target,
                     false, false, false, distance, range, cooldown);
             if (continuousSession(command)) NativeGunRuntime.tacz().continueWatchFire(npc);

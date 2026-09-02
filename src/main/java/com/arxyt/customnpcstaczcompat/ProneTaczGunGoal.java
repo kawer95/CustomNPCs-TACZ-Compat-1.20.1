@@ -35,7 +35,8 @@ public final class ProneTaczGunGoal extends Goal {
             return;
         }
         DominionCombatBalance.Settings settings = DominionCombatBalance.settings();
-        if (NativeNpcTargetReaction.blocks(npc, target, settings, command.directAttackOrder())) {
+        if (NativeNpcTargetReaction.blocks(npc, target, settings,
+                command.directAttackOrder() || DominionCommandBridge.bypassesTargetReaction(npc))) {
             NativeGunDiagnostics.gate(npc, "PRONE", "TARGET_REACTION_DELAY", command, target,
                     false, false, false, distance, Double.POSITIVE_INFINITY, cooldown);
             if (continuousSession(command)) NativeGunRuntime.tacz().continueWatchFire(npc);
@@ -46,10 +47,13 @@ public final class ProneTaczGunGoal extends Goal {
         NativeNpcTargetReaction.noteTarget(npc, target, settings);
         npc.getLookControl().setLookAt(target, 90.0F, 90.0F);
         boolean vanillaCanSee = npc.getSensing().hasLineOfSight(target);
-        Vec3 aimPoint = command.watching()
+        boolean breach = DominionCommandBridge.isBreachAssault(npc);
+        Vec3 aimPoint = breach
+                ? DominionCommandBridge.breachAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
+                : command.watching()
                 ? DominionCommandBridge.watchAimPoint(npc, target, vanillaCanSee ? target.getEyePosition() : null)
                 : target.getEyePosition();
-        boolean canSee = command.watching() ? aimPoint != null : vanillaCanSee;
+        boolean canSee = command.watching() || breach ? aimPoint != null : vanillaCanSee;
         boolean aimReady = canSee && NpcGunAimLock.prepareForShot(npc, target, true, aimPoint);
         // Prone commands deliberately ignore the normal ranged-AI distance cap, but never shoot
         // through terrain or before the first target-facing orientation has synchronized.

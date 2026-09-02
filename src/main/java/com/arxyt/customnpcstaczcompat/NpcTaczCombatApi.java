@@ -23,6 +23,10 @@ public final class NpcTaczCombatApi {
 
     /** Whether the configured burst state currently permits another TaCZ trigger pull. */
     public static boolean allowsShot(EntityNPCInterface npc) {
+        if (DominionCommandBridge.bypassesCustomCadence(npc)) {
+            NpcTaczFirePattern.reset(npc);
+            return true;
+        }
         return !configured(npc)
                 || NpcTaczCombatSettings.resolve(npc).cadenceMode()
                 == NpcTaczCombatSettings.CadenceMode.NATIVE_AUTO
@@ -31,6 +35,10 @@ public final class NpcTaczCombatApi {
 
     /** Records a successful TaCZ trigger pull and returns the configured minimum wait in ticks. */
     public static int recordSuccessfulShot(EntityNPCInterface npc) {
+        if (DominionCommandBridge.bypassesCustomCadence(npc)) {
+            NpcTaczFirePattern.reset(npc);
+            return 1;
+        }
         // With no explicit page policy, request the weapon every AI tick and let TaCZ's own
         // fire mode/cooldown implementation provide its normal continuous-fire cadence.
         return !configured(npc)
