@@ -52,6 +52,7 @@ public final class DominionCommandBridge {
                     optionalUnreflect(lookup, api, "bypassesCustomCadence", Mob.class),
                     optionalUnreflect(lookup, api, "isBreachAssault", Mob.class),
                     optionalUnreflect(lookup, api, "isBreachEntering", Mob.class),
+                    optionalUnreflect(lookup, api, "isBreachStationary", Mob.class),
                     optionalUnreflect(lookup, api, "breachAimPoint", Mob.class, LivingEntity.class),
                     optionalUnreflect(lookup, watchService, "continuousFireRequested", Mob.class),
                     optionalUnreflect(lookup, reloadApi, "isReloadActive", Mob.class),
@@ -120,6 +121,10 @@ public final class DominionCommandBridge {
 
     public static boolean isBreachEntering(Mob unit) {
         return invokeBoolean(access == null ? null : access.breachEntering, unit);
+    }
+
+    public static boolean isBreachStationary(Mob unit) {
+        return invokeBoolean(access == null ? null : access.breachStationary, unit);
     }
 
     public static Vec3 breachAimPoint(Mob unit, LivingEntity target, Vec3 fallback) {
@@ -296,7 +301,8 @@ public final class DominionCommandBridge {
                           MethodHandle attackTarget, MethodHandle movementSpeed, MethodHandle watchRange,
                           MethodHandle watchHasClearShot, MethodHandle watchAimPoint,
                           MethodHandle bypassTargetReaction, MethodHandle bypassCustomCadence,
-                           MethodHandle breachAssault, MethodHandle breachEntering, MethodHandle breachAimPoint,
+                           MethodHandle breachAssault, MethodHandle breachEntering, MethodHandle breachStationary,
+                           MethodHandle breachAimPoint,
                           MethodHandle watchContinuousFire, MethodHandle reloadActive,
                           MethodHandle requestReload) {
     }

@@ -144,7 +144,8 @@ public final class NativeTaczGunGoal extends Goal {
                 backwards = false;
                 return;
             }
-            GunTactics.Maneuver maneuver = command.watching() ? GunTactics.Maneuver.SENTRY
+            GunTactics.Maneuver maneuver = command.watching() || DominionCommandBridge.isBreachStationary(npc)
+                    ? GunTactics.Maneuver.SENTRY
                     : GunTactics.decideControlled(command.commandedAttack(), canSee, distance,
                     GunTactics.commandedApproachDistance(range),
                     command.closeQuarters(), command.prone());
