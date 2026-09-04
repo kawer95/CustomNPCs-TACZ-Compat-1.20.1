@@ -83,6 +83,9 @@ public final class NativeTaczGunGoal extends Goal {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
         if (command.active()) npc.setSprinting(false);
         LivingEntity target = target(command, true);
+        // Reacquisition ends return-running immediately, before reload/fire/retreat can observe
+        // a stale sprint flag and emit particles or select a run-in-place animation.
+        if (target != null) AutonomousReturnSprint.deactivate(npc);
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "REGULAR", "DOMINION_RELOAD_ACTIVE", command, target,
@@ -298,7 +301,13 @@ public final class NativeTaczGunGoal extends Goal {
         // Keep full return speed right up to the one-block arrival boundary. In particular this
         // must not use Dominion's ordinary near-target walking downgrade: an autonomous gunner
         // that was displaced by retreat needs to recover its post as quickly as possible.
-        AutonomousReturnSprint.activate(npc);
+        if (AutonomousReturnSprint.activate(npc)) {
+            // The combat goal remains alive while walking home, so stop() is not called by goal
+            // arbitration. Explicitly release the completed engagement's ADS/trigger state or
+            // TaCZ's aim animation will mask the run animation throughout the return.
+            NativeGunRuntime.tacz().stop(npc, true);
+            NpcGunAimLock.clear(npc);
+        }
         npc.getMoveControl().strafe(0.0F, 0.0F);
         npc.getNavigation().moveTo(autonomousOrigin.x, autonomousOrigin.y, autonomousOrigin.z,
                 RETURN_NAVIGATION_SPEED);

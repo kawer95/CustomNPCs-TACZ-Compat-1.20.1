@@ -20,10 +20,12 @@ public final class AutonomousReturnSprint {
 
     private AutonomousReturnSprint() { }
 
-    public static void activate(EntityNPCInterface npc) {
-        if (npc == null || npc.level().isClientSide) return;
-        ACTIVE.add(npc);
+    /** @return true only on the transition into return-running. */
+    public static boolean activate(EntityNPCInterface npc) {
+        if (npc == null || npc.level().isClientSide) return false;
+        boolean started = ACTIVE.add(npc);
         npc.setSprinting(true);
+        return started;
     }
 
     public static void deactivate(EntityNPCInterface npc) {
