@@ -83,9 +83,9 @@ public final class SentryTaczGunGoal extends Goal {
         // NPC whose stationary policy has no target, receives the same 16-block idle sentry scan.
         if (command.active() && !command.stationarySentry()) return null;
         LivingEntity current = idleTarget;
-        if (!IdleNpcTargeting.retained(npc, current)) {
+        if (!IdleNpcTargeting.valid(npc, current)) {
             current = npc.getTarget();
-            if (!IdleNpcTargeting.retained(npc, current)) current = null;
+            if (!IdleNpcTargeting.valid(npc, current)) current = null;
         }
         if (current == null && npc.tickCount >= nextScanTick) {
             nextScanTick = npc.tickCount + 5 + Math.floorMod(npc.getId(), 5);

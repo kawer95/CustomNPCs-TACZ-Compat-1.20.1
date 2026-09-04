@@ -46,10 +46,15 @@ final class IdleNpcTargeting {
                 && !technical(target) && !sharesVehicle(npc, target);
     }
 
+    static boolean valid(EntityNPCInterface npc, LivingEntity target) {
+        return npc != null && target != null
+                && eligible(npc, target, new NPCAttackSelector(npc));
+    }
+
     private static boolean eligible(EntityNPCInterface npc, LivingEntity target, NPCAttackSelector selector) {
         if (!retained(npc, target) || !npc.getSensing().hasLineOfSight(target)) return false;
         Boolean dominionDecision = DominionIdleTargetBridge.isEnemy(npc, target);
-        if (dominionDecision != null) return dominionDecision;
+        if (Boolean.TRUE.equals(dominionDecision)) return true;
         if (selector.isEntityApplicable(target)) return true;
         // CNPC's selector also folds its configurable aggro radius into the hostility test.
         // Idle gun sentry range is deliberately fixed at 16, so repeat only the native faction
