@@ -9,6 +9,9 @@ import java.util.EnumSet;
 
 /** Regular MOVE+LOOK gun goal for native-model CNPCs. */
 public final class NativeTaczGunGoal extends Goal {
+    /** Combat return is an urgent redeployment, not a normal command that slows near its goal. */
+    private static final double RETURN_NAVIGATION_SPEED = 1.8D;
+    private static final double RETURN_ARRIVAL_DISTANCE_SQR = 1.0D;
     private final EntityNPCInterface npc;
     private int cooldown;
     private int strafeTime = -1;
@@ -285,15 +288,20 @@ public final class NativeTaczGunGoal extends Goal {
 
     private void tickReturnToOrigin(DominionCommandBridge.Snapshot command) {
         if (command.active() || !returningToOrigin || autonomousOrigin == null || npc.isPassenger()) return;
-        if (npc.position().distanceToSqr(autonomousOrigin) <= 1.0D) {
+        if (npc.position().distanceToSqr(autonomousOrigin) <= RETURN_ARRIVAL_DISTANCE_SQR) {
             npc.getNavigation().stop();
             npc.getMoveControl().strafe(0.0F, 0.0F);
+            npc.setSprinting(false);
             clearAutonomousState();
             return;
         }
-        npc.setSprinting(false);
+        // Keep full return speed right up to the one-block arrival boundary. In particular this
+        // must not use Dominion's ordinary near-target walking downgrade: an autonomous gunner
+        // that was displaced by retreat needs to recover its post as quickly as possible.
+        npc.setSprinting(true);
         npc.getMoveControl().strafe(0.0F, 0.0F);
-        npc.getNavigation().moveTo(autonomousOrigin.x, autonomousOrigin.y, autonomousOrigin.z, 1.0D);
+        npc.getNavigation().moveTo(autonomousOrigin.x, autonomousOrigin.y, autonomousOrigin.z,
+                RETURN_NAVIGATION_SPEED);
     }
 
     private void clearAutonomousState() {
