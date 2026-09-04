@@ -48,7 +48,6 @@ public final class NpcGunAimLock {
         // LookAI is retained for CNPC command ownership, but calling rotate every gun-goal pass
         // makes the renderer snap and bypasses our first-shot barrier.  Establish it once only.
         if (changedTarget && commanded && npc.lookAi != null) npc.lookAi.rotate(target);
-        steer(npc, state);
         STATES.put(npc, state);
         boolean aligned = aligned(npc, solution);
         boolean fireReady = npc.tickCount >= readyAtTick && aligned;
@@ -113,7 +112,7 @@ public final class NpcGunAimLock {
                 clear(npc);
                 return;
             }
-            lockAndSynchronize(npc, state, target);
+            advanceAndSynchronize(npc, state, target);
             return;
         }
         if (shouldClearDuringTail(command.active(), command.nativeCombatBlocked())) {
@@ -136,14 +135,14 @@ public final class NpcGunAimLock {
                 track(npc, target);
                 current = STATES.get(npc);
             }
-            if (current != null) lockAndSynchronize(npc, current, target);
+            if (current != null) advanceAndSynchronize(npc, current, target);
             return;
         }
         if (DominionCommandBridge.hasQueuedAttack(npc)) {
             AimState retainedState = STATES.get(npc);
             if (retainedState != null) {
                 LivingEntity retained = retainedState.target();
-                if (retained != null && retained.isAlive()) lockAndSynchronize(npc, retainedState, retained);
+                if (retained != null && retained.isAlive()) advanceAndSynchronize(npc, retainedState, retained);
             }
             return;
         }
@@ -153,6 +152,17 @@ public final class NpcGunAimLock {
     static float targetYaw(double dx, double dz) {
         if (!Double.isFinite(dx) || !Double.isFinite(dz) || dx * dx + dz * dz < 1.0E-8D) return Float.NaN;
         return (float) -Math.toDegrees(Math.atan2(dx, dz));
+    }
+
+    static float stepAngle(float current, float target, float maximumChange) {
+        return Mth.approachDegrees(current, target, maximumChange);
+    }
+
+    static boolean alignedAngles(float bodyYaw, float headYaw, float pitch,
+                                 float targetYaw, float targetPitch) {
+        return Math.abs(Mth.wrapDegrees(targetYaw - bodyYaw)) <= FIRE_YAW_TOLERANCE
+                && Math.abs(Mth.wrapDegrees(targetYaw - headYaw)) <= FIRE_YAW_TOLERANCE
+                && Math.abs(Mth.wrapDegrees(targetPitch - pitch)) <= FIRE_PITCH_TOLERANCE;
     }
 
     /** Pure gate used by tests and by the live target hand-off. */
@@ -180,10 +190,10 @@ public final class NpcGunAimLock {
     private static void steer(EntityNPCInterface npc, AimState state) {
         if (state.lastSteeredTick() == npc.tickCount) return;
         AimSolution solution = state.solution();
-        float body = Mth.approachDegrees(npc.yBodyRot, solution.yaw(), BODY_YAW_DEGREES_PER_TICK);
-        float head = Mth.approachDegrees(npc.getYHeadRot(), solution.yaw(), HEAD_YAW_DEGREES_PER_TICK);
-        float yaw = Mth.approachDegrees(npc.getYRot(), solution.yaw(), BODY_YAW_DEGREES_PER_TICK);
-        float pitch = Mth.approachDegrees(npc.getXRot(), solution.pitch(), PITCH_DEGREES_PER_TICK);
+        float body = stepAngle(npc.yBodyRot, solution.yaw(), BODY_YAW_DEGREES_PER_TICK);
+        float head = stepAngle(npc.getYHeadRot(), solution.yaw(), HEAD_YAW_DEGREES_PER_TICK);
+        float yaw = stepAngle(npc.getYRot(), solution.yaw(), BODY_YAW_DEGREES_PER_TICK);
+        float pitch = stepAngle(npc.getXRot(), solution.pitch(), PITCH_DEGREES_PER_TICK);
         npc.setYRot(yaw);
         npc.yBodyRot = body;
         npc.setYHeadRot(head);
@@ -192,33 +202,23 @@ public final class NpcGunAimLock {
     }
 
     private static boolean aligned(EntityNPCInterface npc, AimSolution solution) {
-        return Math.abs(Mth.wrapDegrees(solution.yaw() - npc.yBodyRot)) <= FIRE_YAW_TOLERANCE
-                && Math.abs(Mth.wrapDegrees(solution.yaw() - npc.getYHeadRot())) <= FIRE_YAW_TOLERANCE
-                && Math.abs(Mth.wrapDegrees(solution.pitch() - npc.getXRot())) <= FIRE_PITCH_TOLERANCE;
+        return alignedAngles(npc.yBodyRot, npc.getYHeadRot(), npc.getXRot(),
+                solution.yaw(), solution.pitch());
     }
 
     /**
-     * Runs after CNPC's own AI and body controllers. The fire gate remains strict, while this
-     * final authoritative write prevents movement/body AI from undoing the aim before entity
-     * tracking runs. A compact packet mirrors every rendered rotation field immediately.
+     * Runs after CNPC's own AI and body controllers.  It advances by one bounded angular step
+     * and sends that real intermediate pose to clients.  Never copy the target solution directly
+     * into the entity: the following gun-goal tick must observe the same visible turn and may only
+     * fire after that turn actually reaches the configured tolerance.
      */
-    private static void lockAndSynchronize(EntityNPCInterface npc, AimState state, LivingEntity target) {
+    private static void advanceAndSynchronize(EntityNPCInterface npc, AimState state, LivingEntity target) {
         AimSolution solution = solve(npc, target, state.aimPoint());
         if (solution == null) return;
         state.solution = solution;
-        float yaw = solution.yaw();
-        float pitch = solution.pitch();
-        npc.setYRot(yaw);
-        npc.yRotO = yaw;
-        npc.yBodyRot = yaw;
-        npc.yBodyRotO = yaw;
-        npc.setYHeadRot(yaw);
-        npc.yHeadRotO = yaw;
-        npc.setXRot(pitch);
-        npc.xRotO = pitch;
-        boolean snap = state.lastSynchronizedTick == Integer.MIN_VALUE;
+        steer(npc, state);
         state.lastSynchronizedTick = npc.tickCount;
-        NativeGunNetwork.syncAim(npc, yaw, pitch, snap);
+        NativeGunNetwork.syncAim(npc, npc.getYRot(), npc.yBodyRot, npc.getYHeadRot(), npc.getXRot());
     }
 
     /** A compact server-side trace for verifying the first-shot barrier in a real encounter. */

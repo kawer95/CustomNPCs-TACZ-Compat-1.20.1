@@ -20,9 +20,9 @@ import noppes.npcs.entity.EntityNPCInterface;
 
 import java.util.function.Supplier;
 
-/** Lightweight exact body/head rotation sync; CNPC's full update packet omits live rotations. */
+/** Lightweight stepped body/head rotation sync; CNPC's full update packet omits live rotations. */
 public final class NativeGunNetwork {
-    private static final String VERSION = "2";
+    private static final String VERSION = "3";
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(CustomNpcsTaczCompat.MOD_ID, "main"), () -> VERSION,
             VERSION::equals, VERSION::equals);
@@ -34,11 +34,12 @@ public final class NativeGunNetwork {
                 .encoder((message, buffer) -> {
                     buffer.writeVarInt(message.entityId());
                     buffer.writeFloat(message.yaw());
+                    buffer.writeFloat(message.bodyYaw());
+                    buffer.writeFloat(message.headYaw());
                     buffer.writeFloat(message.pitch());
-                    buffer.writeBoolean(message.snap());
                 })
                 .decoder(buffer -> new AimSync(buffer.readVarInt(), buffer.readFloat(), buffer.readFloat(),
-                        buffer.readBoolean()))
+                        buffer.readFloat(), buffer.readFloat()))
                 .consumerMainThread(NativeGunNetwork::handleAimSync)
                 .add();
         CHANNEL.messageBuilder(CombatSettingsRequest.class, 1, NetworkDirection.PLAY_TO_SERVER)
@@ -64,8 +65,9 @@ public final class NativeGunNetwork {
                 .add();
     }
 
-    public static void syncAim(EntityNPCInterface npc, float yaw, float pitch, boolean snap) {
-        CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> npc), new AimSync(npc.getId(), yaw, pitch, snap));
+    public static void syncAim(EntityNPCInterface npc, float yaw, float bodyYaw, float headYaw, float pitch) {
+        CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> npc),
+                new AimSync(npc.getId(), yaw, bodyYaw, headYaw, pitch));
     }
 
     /** Client-only request used by the dedicated CNPC TaCZ combat tab. */
@@ -80,7 +82,8 @@ public final class NativeGunNetwork {
 
     private static void handleAimSync(AimSync message, Supplier<NetworkEvent.Context> context) {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                () -> () -> ClientAimSync.apply(message.entityId(), message.yaw(), message.pitch(), message.snap()));
+                () -> () -> ClientAimSync.apply(message.entityId(), message.yaw(), message.bodyYaw(),
+                        message.headYaw(), message.pitch()));
         context.get().setPacketHandled(true);
     }
 
@@ -172,7 +175,7 @@ public final class NativeGunNetwork {
                 buffer.readVarInt(), buffer.readVarInt());
     }
 
-    private record AimSync(int entityId, float yaw, float pitch, boolean snap) { }
+    private record AimSync(int entityId, float yaw, float bodyYaw, float headYaw, float pitch) { }
     private record CombatSettingsRequest(int entityId) { }
     private record CombatSettingsSnapshot(int entityId, NpcTaczCombatSettings settings) { }
     private record CombatSettingsSave(int entityId, NpcTaczCombatSettings settings) { }

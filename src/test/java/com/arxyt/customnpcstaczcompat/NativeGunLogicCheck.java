@@ -60,6 +60,18 @@ public final class NativeGunLogicCheck {
                 "a combat-blocked command must not retain a native target");
         check(!NpcGunAimLock.shouldMaintainNativeTarget(true, false, true, true),
                 "a commanded target must remain authoritative over the native target");
+        check(NpcGunAimLock.stepAngle(0.0F, 90.0F, 20.0F) == 20.0F,
+                "gun aim must advance through a visible bounded turn step");
+        check(NpcGunAimLock.stepAngle(170.0F, -170.0F, 20.0F) == 190.0F,
+                "gun aim must turn through the shortest wrapped arc");
+        check(NpcGunAimLock.alignedAngles(1.0F, -1.0F, 2.0F, 0.0F, 0.0F),
+                "body, head and pitch inside tolerance must permit fire");
+        check(!NpcGunAimLock.alignedAngles(3.0F, 0.0F, 0.0F, 0.0F, 0.0F),
+                "an unturned body must keep the muzzle gated");
+        check(!NpcGunAimLock.alignedAngles(0.0F, 3.0F, 0.0F, 0.0F, 0.0F),
+                "an unturned head must keep the muzzle gated");
+        check(!NpcGunAimLock.alignedAngles(0.0F, 0.0F, 3.0F, 0.0F, 0.0F),
+                "an unaligned pitch must keep the muzzle gated");
         check(NativeGunTimeoutPolicy.transientFailure("IS_SPRINTING"),
                 "sprinting must participate in stuck-state recovery");
         check(NativeGunTimeoutPolicy.timeoutTicks("IS_SPRINTING") == 40,
