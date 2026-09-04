@@ -76,6 +76,21 @@ public final class NpcGunAimLock {
         return solution == null ? AimSolution.INVALID : solution;
     }
 
+    /**
+     * Hard gate for a held automatic trigger.  A goal may ask TaCZ to preserve trigger state
+     * while changing queue targets, but no projectile may be emitted until that new target is
+     * both the live entity target and the orientation already presented to clients.
+     */
+    public static boolean mayContinueFire(EntityNPCInterface npc) {
+        if (npc == null) return false;
+        AimState state = STATES.get(npc);
+        LivingEntity current = npc.getTarget();
+        return state != null && current != null && current.isAlive()
+                && current.getUUID().equals(state.targetId())
+                && npc.tickCount >= state.readyAtTick()
+                && aligned(npc, state.solution());
+    }
+
     static AimSolution solve(EntityNPCInterface npc, LivingEntity target) {
         return solve(npc, target, target == null ? null : target.getEyePosition());
     }
