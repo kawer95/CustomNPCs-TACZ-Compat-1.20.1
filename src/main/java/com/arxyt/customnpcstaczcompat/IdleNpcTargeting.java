@@ -18,24 +18,21 @@ final class IdleNpcTargeting {
     private IdleNpcTargeting() {
     }
 
-    static LivingEntity find(EntityNPCInterface npc) {
-        if (npc == null || npc.isPassenger()) return null;
+    /** Returns every newly visible enemy, nearest first, for the half-second combat queue scan. */
+    static List<LivingEntity> findAll(EntityNPCInterface npc) {
+        if (npc == null || npc.isPassenger()) return List.of();
         NPCAttackSelector selector = new NPCAttackSelector(npc);
         List<LivingEntity> nearby = npc.level().getEntitiesOfClass(LivingEntity.class,
                 npc.getBoundingBox().inflate(RANGE), candidate -> candidate != npc && candidate.isAlive());
-        LivingEntity selected = nearby.stream()
+        List<LivingEntity> selected = nearby.stream()
                 .filter(candidate -> eligible(npc, candidate, selector))
-                .min(Comparator.comparingDouble(npc::distanceToSqr))
-                .orElse(null);
-        if (selected == null && !nearby.isEmpty() && Math.floorMod(npc.tickCount + npc.getId(), 40) < 10) {
+                .sorted(Comparator.comparingDouble(npc::distanceToSqr))
+                .toList();
+        if (selected.isEmpty() && !nearby.isEmpty() && Math.floorMod(npc.tickCount + npc.getId(), 40) < 10) {
             String details = nearby.stream().sorted(Comparator.comparingDouble(npc::distanceToSqr)).limit(6)
                     .map(candidate -> describe(npc, candidate, selector)).reduce((a, b) -> a + ";" + b).orElse("none");
             CustomNpcsTaczCompat.LOGGER.info("[CNPC-IDLE-SCAN] npcId={} tick={} candidates={} rejected=[{}]",
                     npc.getId(), npc.tickCount, nearby.size(), details);
-        } else if (selected != null) {
-            CustomNpcsTaczCompat.LOGGER.info("[CNPC-IDLE-ACQUIRE] npcId={} tick={} targetId={} type={} distance={}",
-                    npc.getId(), npc.tickCount, selected.getId(), selected.getType().builtInRegistryHolder().key().location(),
-                    String.format(Locale.ROOT, "%.2f", npc.distanceTo(selected)));
         }
         return selected;
     }

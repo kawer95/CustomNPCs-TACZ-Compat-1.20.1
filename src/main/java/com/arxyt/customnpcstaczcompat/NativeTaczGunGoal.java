@@ -6,12 +6,16 @@ import noppes.npcs.entity.EntityNPCInterface;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /** Regular MOVE+LOOK gun goal for native-model CNPCs. */
 public final class NativeTaczGunGoal extends Goal {
     /** Combat return is an urgent redeployment, not a normal command that slows near its goal. */
     private static final double RETURN_NAVIGATION_SPEED = 1.8D;
     private static final double RETURN_ARRIVAL_DISTANCE_SQR = 1.0D;
+    private static final int AUTONOMOUS_SCAN_INTERVAL_TICKS = 10;
     private final EntityNPCInterface npc;
     private int cooldown;
     private int strafeTime = -1;
@@ -23,6 +27,8 @@ public final class NativeTaczGunGoal extends Goal {
     private int pursuitStalledTicks;
     private Vec3 autonomousOrigin;
     private LivingEntity autonomousTarget;
+    /** Stable nearest-first queue; periodic scans append only enemies that are not already known. */
+    private final Set<LivingEntity> autonomousTargets = new LinkedHashSet<>();
     private boolean autonomousEngagement;
     private boolean returningToOrigin;
     private int nextAutonomousScanTick;
@@ -259,12 +265,7 @@ public final class NativeTaczGunGoal extends Goal {
         // staggered scan. Adopt that target into the same engagement lifecycle immediately.
         // In particular, TaCZ may clear npc.getTarget() while beginning a reload; retaining the
         // adopted target here is what lets this goal restore it and resume fire afterwards.
-        if (current != null && current != autonomousTarget) {
-            if (!stationary && !autonomousEngagement) autonomousOrigin = npc.position();
-            autonomousEngagement = !stationary;
-            returningToOrigin = false;
-            autonomousTarget = current;
-        }
+        if (current != null && current != autonomousTarget) beginAutonomousTarget(current, stationary);
         if (!IdleNpcTargeting.engaged(npc, current, range(command))
                 && IdleNpcTargeting.engaged(npc, autonomousTarget, range(command))) {
             current = autonomousTarget;
@@ -273,20 +274,49 @@ public final class NativeTaczGunGoal extends Goal {
         if (!IdleNpcTargeting.engaged(npc, current, range(command))) {
             if (current != null && autonomousEngagement) npc.setTarget(null);
             current = null;
+            if (!IdleNpcTargeting.engaged(npc, autonomousTarget, range(command))) autonomousTarget = null;
         }
-        if (current == null && acquire && npc.tickCount >= nextAutonomousScanTick) {
-            nextAutonomousScanTick = npc.tickCount + 5 + Math.floorMod(npc.getId(), 5);
-            current = IdleNpcTargeting.find(npc);
-            if (current != null) {
-                if (!stationary && !autonomousEngagement) autonomousOrigin = npc.position();
-                autonomousEngagement = !stationary;
-                returningToOrigin = false;
-                autonomousTarget = current;
-                npc.setTarget(current);
+        double engagementRange = range(command);
+        autonomousTargets.removeIf(candidate -> candidate == autonomousTarget
+                || !IdleNpcTargeting.engaged(npc, candidate, engagementRange));
+
+        boolean scanned = false;
+        if (acquire && npc.tickCount >= nextAutonomousScanTick) {
+            nextAutonomousScanTick = npc.tickCount + AUTONOMOUS_SCAN_INTERVAL_TICKS;
+            scanned = true;
+            for (LivingEntity candidate : IdleNpcTargeting.findAll(npc)) {
+                if (candidate != current && candidate != autonomousTarget) autonomousTargets.add(candidate);
             }
         }
-        if (current == null && autonomousEngagement && !stationary) returningToOrigin = true;
+        if (current == null) {
+            current = pollAutonomousTarget(engagementRange);
+            if (current != null) beginAutonomousTarget(current, stationary);
+        }
+        // Do not start walking home in the gap between scans. A completed scan is the
+        // authoritative confirmation that both the current target and queued enemies are gone.
+        if (current == null && scanned && autonomousTargets.isEmpty()
+                && autonomousEngagement && !stationary) returningToOrigin = true;
         return current;
+    }
+
+    private void beginAutonomousTarget(LivingEntity target, boolean stationary) {
+        if (target == null) return;
+        if (!stationary && !autonomousEngagement) autonomousOrigin = npc.position();
+        autonomousEngagement = !stationary;
+        returningToOrigin = false;
+        autonomousTarget = target;
+        autonomousTargets.remove(target);
+        npc.setTarget(target);
+    }
+
+    private LivingEntity pollAutonomousTarget(double engagementRange) {
+        Iterator<LivingEntity> iterator = autonomousTargets.iterator();
+        while (iterator.hasNext()) {
+            LivingEntity candidate = iterator.next();
+            iterator.remove();
+            if (IdleNpcTargeting.engaged(npc, candidate, engagementRange)) return candidate;
+        }
+        return null;
     }
 
     private void tickReturnToOrigin(DominionCommandBridge.Snapshot command) {
@@ -317,6 +347,7 @@ public final class NativeTaczGunGoal extends Goal {
         AutonomousReturnSprint.deactivate(npc);
         autonomousOrigin = null;
         autonomousTarget = null;
+        autonomousTargets.clear();
         autonomousEngagement = false;
         returningToOrigin = false;
     }
