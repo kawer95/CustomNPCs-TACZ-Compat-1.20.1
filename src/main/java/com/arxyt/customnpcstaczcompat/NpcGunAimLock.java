@@ -121,6 +121,15 @@ public final class NpcGunAimLock {
             return;
         }
         LivingEntity target = command.attackTarget();
+        // Dominion's stationary sentry order deliberately has no commanded attack target: the
+        // core latches a nearby threat into Mob#getTarget instead.  Clearing the aim state here
+        // made the same living target look "new" on every following gun-goal tick, so readyAt was
+        // perpetually advanced and the NPC could aim forever without firing.
+        LivingEntity nativeTarget = npc.getTarget();
+        if (shouldMaintainNativeTarget(command.active(), command.nativeCombatBlocked(), target != null,
+                nativeTarget != null && nativeTarget.isAlive())) {
+            target = nativeTarget;
+        }
         if (target != null && target.isAlive()) {
             AimState current = STATES.get(npc);
             if (current == null || !target.getUUID().equals(current.targetId())) {
@@ -154,6 +163,12 @@ public final class NpcGunAimLock {
     /** Command-only tail maintenance must never discard an autonomous target's ready tick. */
     static boolean shouldClearDuringTail(boolean commandActive, boolean nativeCombatBlocked) {
         return commandActive && nativeCombatBlocked;
+    }
+
+    /** Allows the stationary sentry's latched native target to retain one continuous aim lock. */
+    static boolean shouldMaintainNativeTarget(boolean commandActive, boolean nativeCombatBlocked,
+                                              boolean hasCommandTarget, boolean nativeTargetAlive) {
+        return commandActive && !nativeCombatBlocked && !hasCommandTarget && nativeTargetAlive;
     }
 
     /** Releases only the forced look state created by this compatibility layer. */

@@ -54,6 +54,12 @@ public final class NativeGunLogicCheck {
                 "an autonomous target must retain its first-shot ready tick after tail maintenance");
         check(NpcGunAimLock.shouldClearDuringTail(true, true),
                 "a blocked Dominion command must still clear its forced aim state");
+        check(NpcGunAimLock.shouldMaintainNativeTarget(true, false, false, true),
+                "a stationary Dominion sentry must retain its latched native target");
+        check(!NpcGunAimLock.shouldMaintainNativeTarget(true, true, false, true),
+                "a combat-blocked command must not retain a native target");
+        check(!NpcGunAimLock.shouldMaintainNativeTarget(true, false, true, true),
+                "a commanded target must remain authoritative over the native target");
         check(NativeGunTimeoutPolicy.transientFailure("IS_SPRINTING"),
                 "sprinting must participate in stuck-state recovery");
         check(NativeGunTimeoutPolicy.timeoutTicks("IS_SPRINTING") == 40,
