@@ -51,8 +51,18 @@ final class IdleNpcTargeting {
                 && eligible(npc, target, new NPCAttackSelector(npc));
     }
 
+    /** Keeps an acquired target through pursuit and retreat, even after line of sight is lost. */
+    static boolean engaged(EntityNPCInterface npc, LivingEntity target, double maximumRange) {
+        if (!basic(npc, target, Math.max(RANGE, maximumRange))) return false;
+        return hostile(npc, target, new NPCAttackSelector(npc));
+    }
+
     private static boolean eligible(EntityNPCInterface npc, LivingEntity target, NPCAttackSelector selector) {
         if (!retained(npc, target) || !npc.getSensing().hasLineOfSight(target)) return false;
+        return hostile(npc, target, selector);
+    }
+
+    private static boolean hostile(EntityNPCInterface npc, LivingEntity target, NPCAttackSelector selector) {
         Boolean dominionDecision = DominionIdleTargetBridge.isEnemy(npc, target);
         if (Boolean.TRUE.equals(dominionDecision)) return true;
         if (selector.isEntityApplicable(target)) return true;
@@ -65,6 +75,12 @@ final class IdleNpcTargeting {
         }
         return target instanceof ServerPlayer player && !player.getAbilities().invulnerable
                 && npc.faction.isAggressiveToPlayer(player);
+    }
+
+    private static boolean basic(EntityNPCInterface npc, LivingEntity target, double maximumRange) {
+        return npc != null && !npc.isPassenger() && target != null && target != npc && target.isAlive()
+                && target.level() == npc.level() && npc.distanceToSqr(target) <= maximumRange * maximumRange
+                && !technical(target) && !sharesVehicle(npc, target);
     }
 
     private static String describe(EntityNPCInterface npc, LivingEntity target, NPCAttackSelector selector) {

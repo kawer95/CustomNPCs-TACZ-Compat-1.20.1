@@ -18,6 +18,11 @@ public final class NativeTaczGunGoal extends Goal {
     private double lastPursuitZ;
     private boolean pursuitPositionReady;
     private int pursuitStalledTicks;
+    private Vec3 autonomousOrigin;
+    private LivingEntity autonomousTarget;
+    private boolean autonomousEngagement;
+    private boolean returningToOrigin;
+    private int nextAutonomousScanTick;
 
     public NativeTaczGunGoal(EntityNPCInterface npc) {
         this.npc = npc;
@@ -26,21 +31,23 @@ public final class NativeTaczGunGoal extends Goal {
 
     @Override public boolean canUse() {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
-        LivingEntity target = target(command);
-        return NativeNpcEligibility.active(npc) && target != null && target.isAlive()
-                && (command.active() || !npc.isPassenger())
-                && !command.nativeCombatBlocked()
-                && (command.commandedAttack() || npc.distanceTo(target) <= range(command));
+        if (!NativeNpcEligibility.active(npc) || command.nativeCombatBlocked()
+                || command.prone() || command.watching()) return false;
+        LivingEntity target = target(command, true);
+        // Acquisition range and weapon range are different. A target found within the fixed
+        // 16-block alert radius must start this goal even when this NPC's configured gun range
+        // is shorter; maneuver() will pursue until the weapon can legally fire.
+        return (target != null && target.isAlive()) || (!command.active() && returningToOrigin);
     }
 
     @Override public boolean canContinueToUse() {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
-        LivingEntity target = target(command);
+        LivingEntity target = target(command, true);
         // Keep the goal alive across a preferred-range boundary: Dominion's reload service and
         // TaCZ's own weapon state must not be torn down while the NPC navigates back into range.
-        return NativeNpcEligibility.active(npc) && target != null && target.isAlive()
-                && (command.active() || !npc.isPassenger())
-                && !command.nativeCombatBlocked();
+        return NativeNpcEligibility.active(npc) && !command.nativeCombatBlocked()
+                && !command.prone() && !command.watching()
+                && ((target != null && target.isAlive()) || (!command.active() && returningToOrigin));
     }
 
     @Override public boolean requiresUpdateEveryTick() { return true; }
@@ -72,7 +79,7 @@ public final class NativeTaczGunGoal extends Goal {
     public void tick() {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
         if (command.active()) npc.setSprinting(false);
-        LivingEntity target = target(command);
+        LivingEntity target = target(command, true);
         if (DominionCommandBridge.isReloadActive(npc)) {
             NativeNpcTargetReaction.satisfyDuringReload(npc, target, DominionCombatBalance.settings());
             NativeGunDiagnostics.gate(npc, "REGULAR", "DOMINION_RELOAD_ACTIVE", command, target,
@@ -80,7 +87,10 @@ public final class NativeTaczGunGoal extends Goal {
             hold(command);
             return;
         }
-        if (target == null) return;
+        if (target == null) {
+            tickReturnToOrigin(command);
+            return;
+        }
         if (command.commandedAttack() && npc.getTarget() != target) npc.setTarget(target);
 
         DominionCombatBalance.Settings settings = DominionCombatBalance.settings();
@@ -176,17 +186,14 @@ public final class NativeTaczGunGoal extends Goal {
             pursue(target, 1.0D, distance, range);
             return;
         }
+        npc.setSprinting(false);
         npc.getNavigation().stop();
-        if (++strafeTime >= 20) {
-            if (npc.getRandom().nextFloat() < 0.3F) clockwise = !clockwise;
-            if (npc.getRandom().nextFloat() < 0.3F) backwards = !backwards;
-            strafeTime = 0;
+        if (distance < 10.0D) {
+            npc.getMoveControl().strafe(-0.5F, 0.0F);
+            NpcGunAimLock.alignForShot(npc, target);
+        } else {
+            npc.getMoveControl().strafe(0.0F, 0.0F);
         }
-        if (distance > range * 0.65D) backwards = false;
-        else if (distance < range * 0.60D) backwards = true;
-        npc.getMoveControl().strafe((float) (backwards ? -NativeGunConfig.FORWARD_SPEED.get()
-                : NativeGunConfig.FORWARD_SPEED.get()),
-                (float) (clockwise ? NativeGunConfig.SIDEWAYS_SPEED.get() : -NativeGunConfig.SIDEWAYS_SPEED.get()));
     }
 
     /**
@@ -225,8 +232,75 @@ public final class NativeTaczGunGoal extends Goal {
         npc.getMoveControl().strafe(0.0F, 0.0F);
     }
 
-    private LivingEntity target(DominionCommandBridge.Snapshot command) {
-        return command.active() ? command.attackTarget() : npc.getTarget();
+    private LivingEntity target(DominionCommandBridge.Snapshot command, boolean acquire) {
+        if (command.active() && command.attackTarget() != null) {
+            clearAutonomousState();
+            return command.attackTarget();
+        }
+        boolean stationary = command.stationarySentry();
+        if (command.active() && !stationary || npc.isPassenger()) {
+            if (npc.getTarget() == autonomousTarget) npc.setTarget(null);
+            clearAutonomousState();
+            return null;
+        }
+
+        LivingEntity current = npc.getTarget();
+        if (current != autonomousTarget && !IdleNpcTargeting.valid(npc, current)) {
+            if (current != null) npc.setTarget(null);
+            current = null;
+        }
+        // CNPC's native target selector may win the race before this goal performs its own
+        // staggered scan. Adopt that target into the same engagement lifecycle immediately.
+        // In particular, TaCZ may clear npc.getTarget() while beginning a reload; retaining the
+        // adopted target here is what lets this goal restore it and resume fire afterwards.
+        if (current != null && current != autonomousTarget) {
+            if (!stationary && !autonomousEngagement) autonomousOrigin = npc.position();
+            autonomousEngagement = !stationary;
+            returningToOrigin = false;
+            autonomousTarget = current;
+        }
+        if (!IdleNpcTargeting.engaged(npc, current, range(command))
+                && IdleNpcTargeting.engaged(npc, autonomousTarget, range(command))) {
+            current = autonomousTarget;
+            npc.setTarget(current);
+        }
+        if (!IdleNpcTargeting.engaged(npc, current, range(command))) {
+            if (current != null && autonomousEngagement) npc.setTarget(null);
+            current = null;
+        }
+        if (current == null && acquire && npc.tickCount >= nextAutonomousScanTick) {
+            nextAutonomousScanTick = npc.tickCount + 5 + Math.floorMod(npc.getId(), 5);
+            current = IdleNpcTargeting.find(npc);
+            if (current != null) {
+                if (!stationary && !autonomousEngagement) autonomousOrigin = npc.position();
+                autonomousEngagement = !stationary;
+                returningToOrigin = false;
+                autonomousTarget = current;
+                npc.setTarget(current);
+            }
+        }
+        if (current == null && autonomousEngagement && !stationary) returningToOrigin = true;
+        return current;
+    }
+
+    private void tickReturnToOrigin(DominionCommandBridge.Snapshot command) {
+        if (command.active() || !returningToOrigin || autonomousOrigin == null || npc.isPassenger()) return;
+        if (npc.position().distanceToSqr(autonomousOrigin) <= 1.0D) {
+            npc.getNavigation().stop();
+            npc.getMoveControl().strafe(0.0F, 0.0F);
+            clearAutonomousState();
+            return;
+        }
+        npc.setSprinting(false);
+        npc.getMoveControl().strafe(0.0F, 0.0F);
+        npc.getNavigation().moveTo(autonomousOrigin.x, autonomousOrigin.y, autonomousOrigin.z, 1.0D);
+    }
+
+    private void clearAutonomousState() {
+        autonomousOrigin = null;
+        autonomousTarget = null;
+        autonomousEngagement = false;
+        returningToOrigin = false;
     }
 
     private double range(DominionCommandBridge.Snapshot command) {

@@ -3,7 +3,6 @@ package com.arxyt.customnpcstaczcompat.mixin;
 import com.arxyt.customnpcstaczcompat.NativeTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.NpcGunAimLock;
 import com.arxyt.customnpcstaczcompat.ProneTaczGunGoal;
-import com.arxyt.customnpcstaczcompat.SentryTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.WatchTaczGunGoal;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -25,10 +24,9 @@ public abstract class EntityNPCInterfaceMixin extends PathfinderMob {
         EntityNPCInterface npc = (EntityNPCInterface) (Object) this;
         goalSelector.addGoal(-1, new ProneTaczGunGoal(npc));
         goalSelector.addGoal(-1, new WatchTaczGunGoal(npc));
-        goalSelector.addGoal(0, new NativeTaczGunGoal(npc));
-        // MOVE ownership is deliberate: an idle gunner must finish this engagement in place,
-        // without CNPC's native pursuit/wander goals fighting the stationary firing goal.
-        goalSelector.addGoal(-2, new SentryTaczGunGoal(npc));
+        // The complete gun-combat goal owns MOVE and LOOK at high priority. It yields explicitly
+        // to prone/watch goals, but ordinary CNPC movement may not starve autonomous combat.
+        goalSelector.addGoal(-2, new NativeTaczGunGoal(npc));
     }
 
     /** Runs after CNPC's own tick so queued-command aim does not snap back to idle. */
