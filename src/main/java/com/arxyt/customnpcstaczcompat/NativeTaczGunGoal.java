@@ -28,6 +28,7 @@ public final class NativeTaczGunGoal extends Goal {
         DominionCommandBridge.Snapshot command = DominionCommandBridge.snapshot(npc);
         LivingEntity target = target(command);
         return NativeNpcEligibility.active(npc) && target != null && target.isAlive()
+                && (command.active() || !npc.isPassenger())
                 && !command.nativeCombatBlocked()
                 && (command.commandedAttack() || npc.distanceTo(target) <= range(command));
     }
@@ -38,6 +39,7 @@ public final class NativeTaczGunGoal extends Goal {
         // Keep the goal alive across a preferred-range boundary: Dominion's reload service and
         // TaCZ's own weapon state must not be torn down while the NPC navigates back into range.
         return NativeNpcEligibility.active(npc) && target != null && target.isAlive()
+                && (command.active() || !npc.isPassenger())
                 && !command.nativeCombatBlocked();
     }
 

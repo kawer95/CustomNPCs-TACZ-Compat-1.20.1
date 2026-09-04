@@ -6,14 +6,16 @@ import noppes.npcs.entity.EntityNPCInterface;
 
 import java.util.EnumSet;
 
-/** Fires at a native target while Dominion keeps the NPC physically stationary. */
+/** Acquires and fires at a native enemy while an otherwise idle NPC remains stationary. */
 public final class SentryTaczGunGoal extends Goal {
     private final EntityNPCInterface npc;
     private int cooldown;
+    private int nextScanTick;
+    private LivingEntity idleTarget;
 
     public SentryTaczGunGoal(EntityNPCInterface npc) {
         this.npc = npc;
-        setFlags(EnumSet.of(Flag.LOOK));
+        setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override public boolean canUse() { return target(DominionCommandBridge.snapshot(npc)) != null; }
@@ -76,9 +78,21 @@ public final class SentryTaczGunGoal extends Goal {
     }
 
     private LivingEntity target(DominionCommandBridge.Snapshot command) {
-        if (command.watching() || !command.stationarySentry() || !NativeNpcEligibility.active(npc)) return null;
-        LivingEntity target = npc.getTarget();
-        return target != null && target != npc && target.isAlive()
-                && npc.distanceTo(target) <= Math.max(1.0D, NpcTaczCombatApi.range(npc)) ? target : null;
+        if (command.watching() || !NativeNpcEligibility.active(npc) || npc.isPassenger()) return null;
+        // Explicit Dominion movement/attack tasks always win. An unselected NPC, or a selected
+        // NPC whose stationary policy has no target, receives the same 16-block idle sentry scan.
+        if (command.active() && !command.stationarySentry()) return null;
+        LivingEntity current = idleTarget;
+        if (!IdleNpcTargeting.retained(npc, current)) {
+            current = npc.getTarget();
+            if (!IdleNpcTargeting.retained(npc, current)) current = null;
+        }
+        if (current == null && npc.tickCount >= nextScanTick) {
+            nextScanTick = npc.tickCount + 5 + Math.floorMod(npc.getId(), 5);
+            current = IdleNpcTargeting.find(npc);
+            if (current != null) npc.setTarget(current);
+        }
+        idleTarget = current;
+        return current;
     }
 }

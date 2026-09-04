@@ -26,7 +26,9 @@ public abstract class EntityNPCInterfaceMixin extends PathfinderMob {
         goalSelector.addGoal(-1, new ProneTaczGunGoal(npc));
         goalSelector.addGoal(-1, new WatchTaczGunGoal(npc));
         goalSelector.addGoal(0, new NativeTaczGunGoal(npc));
-        goalSelector.addGoal(0, new SentryTaczGunGoal(npc));
+        // MOVE ownership is deliberate: an idle gunner must finish this engagement in place,
+        // without CNPC's native pursuit/wander goals fighting the stationary firing goal.
+        goalSelector.addGoal(-2, new SentryTaczGunGoal(npc));
     }
 
     /** Runs after CNPC's own tick so queued-command aim does not snap back to idle. */
