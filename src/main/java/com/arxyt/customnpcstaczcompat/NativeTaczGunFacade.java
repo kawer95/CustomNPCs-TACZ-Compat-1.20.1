@@ -263,9 +263,8 @@ public final class NativeTaczGunFacade {
         NativeGunDiagnostics.operate(shooter, shooter.getTarget(), "TIMEOUT_RECOVERY_" + result.name());
     }
 
-    /** Leaves visual locomotion only at the real weapon boundary and skips TaCZ's sprint unwind. */
+    /** Clears TaCZ's shot gate without overwriting command-owned locomotion animation state. */
     private static void prepareImmediateFire(EntityNPCInterface shooter, IGunOperator operator) {
-        shooter.setSprinting(false);
         operator.getDataHolder().sprintTimeS = 0.0F;
         operator.getDataHolder().sprintTimestamp = System.currentTimeMillis();
     }

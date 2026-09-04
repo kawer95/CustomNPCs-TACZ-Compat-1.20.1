@@ -125,7 +125,6 @@ public final class NativeTaczGunGoal extends Goal {
                     true, vanillaCanSee, canSee, distance, desired, cooldown);
             return;
         }
-        if (command.active()) npc.setSprinting(false);
         NativeTaczGunFacade.Action action = NativeGunRuntime.tacz().operate(npc, target);
         cooldown = action.delayTicks();
     }
