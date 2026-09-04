@@ -4,6 +4,7 @@ import com.arxyt.customnpcstaczcompat.NativeTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.NpcGunAimLock;
 import com.arxyt.customnpcstaczcompat.ProneTaczGunGoal;
 import com.arxyt.customnpcstaczcompat.WatchTaczGunGoal;
+import com.arxyt.customnpcstaczcompat.AutonomousReturnSprint;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.level.Level;
@@ -35,6 +36,9 @@ public abstract class EntityNPCInterfaceMixin extends PathfinderMob {
         if (!level().isClientSide) {
             EntityNPCInterface npc = (EntityNPCInterface) (Object) this;
             NpcGunAimLock.maintain(npc);
+            // CNPC rewrites the ordinary sprint bit during its own update. Reassert autonomous
+            // return after that write so vanilla entity data replicates the run-animation flag.
+            AutonomousReturnSprint.maintain(npc);
         }
     }
 }

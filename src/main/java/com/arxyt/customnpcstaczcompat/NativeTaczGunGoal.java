@@ -291,20 +291,21 @@ public final class NativeTaczGunGoal extends Goal {
         if (npc.position().distanceToSqr(autonomousOrigin) <= RETURN_ARRIVAL_DISTANCE_SQR) {
             npc.getNavigation().stop();
             npc.getMoveControl().strafe(0.0F, 0.0F);
-            npc.setSprinting(false);
+            AutonomousReturnSprint.deactivate(npc);
             clearAutonomousState();
             return;
         }
         // Keep full return speed right up to the one-block arrival boundary. In particular this
         // must not use Dominion's ordinary near-target walking downgrade: an autonomous gunner
         // that was displaced by retreat needs to recover its post as quickly as possible.
-        npc.setSprinting(true);
+        AutonomousReturnSprint.activate(npc);
         npc.getMoveControl().strafe(0.0F, 0.0F);
         npc.getNavigation().moveTo(autonomousOrigin.x, autonomousOrigin.y, autonomousOrigin.z,
                 RETURN_NAVIGATION_SPEED);
     }
 
     private void clearAutonomousState() {
+        AutonomousReturnSprint.deactivate(npc);
         autonomousOrigin = null;
         autonomousTarget = null;
         autonomousEngagement = false;
