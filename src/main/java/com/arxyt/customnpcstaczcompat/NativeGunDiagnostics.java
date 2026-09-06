@@ -29,7 +29,7 @@ public final class NativeGunDiagnostics {
                             DominionCommandBridge.Snapshot command, LivingEntity target,
                             boolean aimReady, boolean vanillaCanSee, boolean effectiveCanSee,
                             double distance, double range, int cooldown) {
-        if (npc == null) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null) return;
         State state = state(npc);
         String targetId = target == null ? "none" : target.getUUID().toString();
         String signature = goal + "|" + reason + "|" + targetId;
@@ -50,7 +50,7 @@ public final class NativeGunDiagnostics {
 
     /** Records TaCZ entry-state changes and failed/recovered shoot attempts without logging every bullet. */
     public static void operate(EntityNPCInterface npc, LivingEntity target, String outcome) {
-        if (npc == null) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null) return;
         State state = state(npc);
         if (!state.shouldLogOperation(npc.tickCount, outcome)) return;
         GunStatus gun = gunStatus(npc);
@@ -69,7 +69,7 @@ public final class NativeGunDiagnostics {
     /** Proves the exact custom cadence consumed at the successful TaCZ trigger boundary. */
     public static void cadence(EntityNPCInterface npc, NpcTaczCombatSettings settings, int delay,
                                int nextShotTick, int remainingShots, int remainingGroups) {
-        if (npc == null || settings == null) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null || settings == null) return;
         State state = state(npc);
         if (!state.shouldLogCadence(npc.tickCount)) return;
         CustomNpcsTaczCompat.LOGGER.info(
@@ -82,7 +82,7 @@ public final class NativeGunDiagnostics {
 
     /** Confirms that a new Ctrl/area queue discarded only stale first-target reaction state. */
     public static void attackQueueStarted(EntityNPCInterface npc) {
-        if (npc == null) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null) return;
         CustomNpcsTaczCompat.LOGGER.info(
                 "[CNPC-TACZ-ATTACK-QUEUE] npcId={} tick={} action=clear_stale_first_target_reaction",
                 npc.getId(), npc.tickCount);
@@ -92,7 +92,7 @@ public final class NativeGunDiagnostics {
     public static void pursuit(EntityNPCInterface npc, LivingEntity target, double distance, double range,
                                double speed, int stalledTicks, boolean entityAccepted,
                                boolean coordinateFallback, boolean coordinateAccepted) {
-        if (npc == null || target == null) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null || target == null) return;
         State state = state(npc);
         String signature = entityAccepted + "|" + coordinateFallback + "|" + coordinateAccepted
                 + "|" + npc.getNavigation().isDone();

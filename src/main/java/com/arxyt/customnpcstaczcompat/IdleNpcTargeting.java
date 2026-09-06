@@ -28,7 +28,8 @@ final class IdleNpcTargeting {
                 .filter(candidate -> eligible(npc, candidate, selector))
                 .sorted(Comparator.comparingDouble(npc::distanceToSqr))
                 .toList();
-        if (selected.isEmpty() && !nearby.isEmpty() && Math.floorMod(npc.tickCount + npc.getId(), 40) < 10) {
+        if (NativeDiagnosticLog.enabled() && selected.isEmpty() && !nearby.isEmpty()
+                && Math.floorMod(npc.tickCount + npc.getId(), 40) < 10) {
             String details = nearby.stream().sorted(Comparator.comparingDouble(npc::distanceToSqr)).limit(6)
                     .map(candidate -> describe(npc, candidate, selector)).reduce((a, b) -> a + ";" + b).orElse("none");
             CustomNpcsTaczCompat.LOGGER.info("[CNPC-IDLE-SCAN] npcId={} tick={} candidates={} rejected=[{}]",

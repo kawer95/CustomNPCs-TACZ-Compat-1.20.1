@@ -81,6 +81,7 @@ public final class NativeGunLogicCheck {
         checkCombatSettingsValidation();
         checkMovementSampling();
         checkOnceAnimationArbitration();
+        checkDiagnosticLoggingDefaults();
         System.out.println("Native CNPC TaCZ pure-logic checks passed");
     }
 
@@ -156,6 +157,14 @@ public final class NativeGunLogicCheck {
                         OnceAnimationArbitrator.Action.RELOAD)
                         == OnceAnimationArbitrator.Decision.START,
                 "an inactive fire layer must allow reload to start");
+    }
+
+    private static void checkDiagnosticLoggingDefaults() {
+        System.clearProperty(NativeDiagnosticLog.PROPERTY);
+        check(!NativeDiagnosticLog.enabled(), "continuous diagnostics must be disabled by default");
+        System.setProperty(NativeDiagnosticLog.PROPERTY, "true");
+        check(NativeDiagnosticLog.enabled(), "developer diagnostics opt-in must remain available");
+        System.clearProperty(NativeDiagnosticLog.PROPERTY);
     }
 
     private static void check(boolean condition, String message) {

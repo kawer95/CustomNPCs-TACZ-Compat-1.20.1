@@ -2,6 +2,7 @@ package com.arxyt.customnpcstaczcompat.client;
 
 import com.arxyt.customnpcstaczcompat.CustomNpcsTaczCompat;
 import com.arxyt.customnpcstaczcompat.NativeNpcEligibility;
+import com.arxyt.customnpcstaczcompat.NativeDiagnosticLog;
 import com.arxyt.customnpcstaczcompat.NpcCrawlState;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
@@ -281,6 +282,7 @@ public final class NativeNpcAnimationController {
     }
 
     private static void traceReload(EntityNPCInterface npc, String requested, String source, OncePlayback result) {
+        if (!NativeDiagnosticLog.enabled()) return;
         CustomNpcsTaczCompat.LOGGER.info(
                 "[CNPC-TACZ-RELOAD-ANIM] npcId={} uuid={} source={} prone={} reloadState={} animationSet={} requested={} assetFound={} previousAction={} previousActive={} decision={}",
                 npc.getId(), npc.getUUID(), source, isProne(npc), reloadState(npc), result.animationSet(), requested,
@@ -489,6 +491,7 @@ public final class NativeNpcAnimationController {
 
     /** Emits one detailed record every two seconds per gun-holding NPC that was not accepted. */
     private static void traceIneligible(EntityNPCInterface npc) {
+        if (!NativeDiagnosticLog.enabled()) return;
         if (IGun.getIGunOrNull(npc.getMainHandItem()) == null) return;
         boolean humanoid = NativeNpcEligibility.isSixBoneHumanoid(npc);
         boolean ysm = humanoid && NativeNpcEligibility.usesYsmRenderer(npc);
@@ -497,7 +500,7 @@ public final class NativeNpcAnimationController {
     }
 
     private static void traceSkip(EntityNPCInterface npc, String reason, ResourceLocation animationSet, String detail) {
-        if (npc == null || npc.tickCount % 40 != 0) return;
+        if (!NativeDiagnosticLog.enabled() || npc == null || npc.tickCount % 40 != 0) return;
         CustomNpcsTaczCompat.LOGGER.info(
                 "[CNPC-TACZ-ANIM-SKIP] npcId={} uuid={} tick={} reason={} modelId={} gun={} animationSet={} detail={}",
                 npc.getId(), npc.getUUID(), npc.tickCount, reason,
@@ -641,6 +644,7 @@ public final class NativeNpcAnimationController {
                            long worldTick,
                            NativeNpcMovementTracker.Sample movement, float limbSwingAmount,
                            boolean prone, boolean crouching, boolean poseCrouching, boolean aiming) {
+            if (!NativeDiagnosticLog.enabled()) return;
             String signature = animationId + "|" + model.getClass().getName() + "|" + movement.walking()
                     + "|" + movement.teleported() + "|" + npc.isSprinting() + "|" + prone + "|" + crouching
                     + "|" + poseCrouching + "|" + aiming
@@ -664,6 +668,7 @@ public final class NativeNpcAnimationController {
 
         private void traceRoot(EntityNPCInterface npc, long worldTick, Vec3f position, Vec3f rotation,
                                float proneRoot, float proneLift, float pronePivotY, float proneAnchor) {
+            if (!NativeDiagnosticLog.enabled()) return;
             if (lastRootTraceWorldTick == worldTick || lastRootTraceWorldTick != Long.MIN_VALUE
                     && worldTick - lastRootTraceWorldTick < 20L) return;
             lastRootTraceWorldTick = worldTick;

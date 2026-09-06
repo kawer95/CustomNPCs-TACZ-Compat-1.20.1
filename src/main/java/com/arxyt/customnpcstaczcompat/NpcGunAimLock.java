@@ -239,6 +239,7 @@ public final class NpcGunAimLock {
     /** A compact server-side trace for verifying the first-shot barrier in a real encounter. */
     private static void trace(EntityNPCInterface npc, AimState state, boolean targetChanged,
                               boolean aligned, boolean fireReady) {
+        if (!NativeDiagnosticLog.enabled()) return;
         if (!targetChanged && state.lastDiagnosticTick() != Integer.MIN_VALUE
                 && npc.tickCount - state.lastDiagnosticTick() < 10) return;
         state.lastDiagnosticTick = npc.tickCount;

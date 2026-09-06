@@ -37,6 +37,7 @@ public final class NativeGunEvents {
     /** Keeps one precise trace for the intermittent prone near-muzzle ground collision. */
     @SubscribeEvent
     public void traceNearMuzzleBlockHit(AmmoHitBlockEvent event) {
+        if (!NativeDiagnosticLog.enabled()) return;
         EntityKineticBullet bullet = event.getAmmo();
         if (!(bullet.getOwner() instanceof EntityNPCInterface npc) || !NativeNpcEligibility.active(npc)) return;
         double distance = event.getHitResult().getLocation().distanceTo(npc.position());
