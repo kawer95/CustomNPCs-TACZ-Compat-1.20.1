@@ -27,6 +27,9 @@ public final class CustomNpcsTaczCompat {
         }
         DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
                 () -> com.arxyt.customnpcstaczcompat.client.ClientBootstrap::init);
+        if (NativeDiagnosticLog.enabled()) {
+            LOGGER.warn("CNPC-origin damage/death audit is enabled; records are tagged [CNPC-DAMAGE-AUDIT]");
+        }
         LOGGER.info("Native CustomNPCs TaCZ compatibility loaded");
     }
 
